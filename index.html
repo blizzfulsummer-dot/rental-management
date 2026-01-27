@@ -1,72 +1,248 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fetch Test</title>
-<style>
-  body { font-family: sans-serif; padding: 2rem; }
-  input { padding: 0.5rem; width: 200px; margin-right: 1rem; }
-  button { padding: 0.5rem 1rem; }
-  #toast {
-    visibility: hidden;
-    min-width: 200px;
-    background-color: #333;
-    color: #fff;
-    text-align: center;
-    border-radius: 5px;
-    padding: 0.5rem;
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1;
-  }
-  #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2s; }
-  @keyframes fadein { from {bottom:0; opacity:0;} to {bottom:30px; opacity:1;} }
-  @keyframes fadeout { from {bottom:30px; opacity:1;} to {bottom:0; opacity:0;} }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login</title>
+
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --bg: #f4f6fb;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --card: #ffffff;
+      --radius: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #eef2ff, #f8fafc);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      color: var(--text);
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 380px;
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 2rem;
+      box-shadow:
+        0 10px 25px rgba(0, 0, 0, 0.08),
+        0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .login-card h1 {
+      font-size: 1.6rem;
+      margin: 0 0 0.5rem;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .login-card p {
+      margin: 0 0 2rem;
+      font-size: 0.95rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .form-group {
+      margin-bottom: 1.2rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 0.4rem;
+      color: var(--muted);
+    }
+
+    input {
+      width: 100%;
+      padding: 0.75rem 0.85rem;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    .actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .actions a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .actions a:hover {
+      text-decoration: underline;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.85rem;
+      border-radius: 12px;
+      border: none;
+      background: var(--primary);
+      color: white;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.05s;
+    }
+
+    button:hover {
+      background: var(--primary-dark);
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .footer-text {
+      margin-top: 1.5rem;
+      font-size: 0.85rem;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .footer-text a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    @media (max-width: 360px) {
+      .login-card {
+        padding: 1.5rem;
+      }
+    }
+  </style>
 </head>
 <body>
 
-<h2>Fetch Test</h2>
-<input type="text" id="ipField" placeholder="Enter device IP (https://...)">
-<button id="fetchBtn">Fetch /api/switch</button>
+  <div class="login-card">
+    <h1>Welcome to ReMan</h1>
+    <p>Rental Management System</p>
 
-<div id="toast"></div>
+    <form onsubmit="submitLogIn(event)">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="you@example.com" required />
+      </div>
 
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="••••••••" required />
+      </div>
+
+      <div class="actions">
+        <label>
+         
+        </label>
+        <a href="#">Forgot password?</a>
+      </div>
+
+      <button type="submit" onsubmit="submitLogIn()">Log In</button>
+    </form>
+
+    <div class="footer-text">
+      Don’t have an account?
+      <a href="#">Sign up</a>
+    </div>
+  </div>
 <script>
-const ipField = document.getElementById('ipField');
-const fetchBtn = document.getElementById('fetchBtn');
-const toast = document.getElementById('toast');
+  const API_URL = "https://rental-management.iot-exhibit.workers.dev/api";
 
-function showToast(msg) {
-  toast.textContent = msg;
-  toast.className = 'show';
-  setTimeout(() => toast.className = toast.className.replace('show', ''), 2500);
-}
+  async function submitLogIn(event) {
+    event.preventDefault();
 
-fetchBtn.addEventListener('click', () => {
-  const ip = ipField.value.trim();
-  if (!ip) return showToast('Please enter a valid IP or URL');
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
 
-  const url = ip + '/api/switch';
+    try {
+      const res = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
 
-  fetch(url)
-    .then(response => {
-      if (!response.ok) throw new Error('Network response not ok');
-      return response.json();
-    })
-    .then(data => {
-      console.log('Fetch successful:', data);
-      showToast('Fetch successful!');
-    })
-    .catch(err => {
-      console.error('Fetch error:', err);
-      showToast('Fetch failed. Check console.');
-    });
-});
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || "Login failed");
+        return;
+      }
+
+      console.log("Logged in:", data);
+
+      // Save tokens in localStorage (or sessionStorage)
+      localStorage.setItem("accessToken", data.accessToken);
+      localStorage.setItem("refreshToken", data.refreshToken);
+
+      alert("Login successful!");
+      // Redirect to dashboard
+      window.location.href = "/dashboard.html";
+
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong");
+    }
+  }
+
+  // Example: token refresh
+  async function refreshAccessToken() {
+    const refreshToken = localStorage.getItem("refreshToken");
+    if (!refreshToken) return null;
+
+    try {
+      const res = await fetch(`${API_URL}/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.log("Refresh token invalid");
+        return null;
+      }
+
+      localStorage.setItem("accessToken", data.accessToken);
+      return data.accessToken;
+
+    } catch (err) {
+      console.error(err);
+      return null;
+    }
+  }
 </script>
-
 </body>
 </html>
