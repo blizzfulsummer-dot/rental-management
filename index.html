@@ -54,10 +54,29 @@
     }
 
     .login-card p {
-      margin: 0 0 2rem;
+      margin: 0 0 1.5rem;
       font-size: 0.95rem;
       color: var(--muted);
       text-align: center;
+    }
+
+    .message {
+      display: none;
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    .message.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .message.success {
+      background: #dcfce7;
+      color: #166534;
     }
 
     .form-group {
@@ -78,7 +97,6 @@
       border: 1px solid #e5e7eb;
       font-size: 0.95rem;
       outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
     }
 
     input:focus {
@@ -88,8 +106,7 @@
 
     .actions {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
+      justify-content: flex-end;
       font-size: 0.85rem;
       margin-bottom: 1.5rem;
     }
@@ -98,10 +115,6 @@
       color: var(--primary);
       text-decoration: none;
       font-weight: 500;
-    }
-
-    .actions a:hover {
-      text-decoration: underline;
     }
 
     button {
@@ -114,15 +127,10 @@
       font-size: 1rem;
       font-weight: 500;
       cursor: pointer;
-      transition: background 0.2s, transform 0.05s;
     }
 
     button:hover {
       background: var(--primary-dark);
-    }
-
-    button:active {
-      transform: scale(0.98);
     }
 
     .footer-text {
@@ -137,12 +145,6 @@
       text-decoration: none;
       font-weight: 500;
     }
-
-    @media (max-width: 360px) {
-      .login-card {
-        padding: 1.5rem;
-      }
-    }
   </style>
 </head>
 <body>
@@ -150,6 +152,8 @@
   <div class="login-card">
     <h1>Welcome to ReMan</h1>
     <p>Rental Management System</p>
+
+    <div id="message" class="message"></div>
 
     <form onsubmit="submitLogIn(event)">
       <div class="form-group">
@@ -163,13 +167,10 @@
       </div>
 
       <div class="actions">
-        <label>
-         
-        </label>
         <a href="#">Forgot password?</a>
       </div>
 
-      <button type="submit" onsubmit="submitLogIn()">Log In</button>
+      <button type="submit">Log In</button>
     </form>
 
     <div class="footer-text">
@@ -177,13 +178,22 @@
       <a href="#">Sign up</a>
     </div>
   </div>
+
 <script>
   const API_URL = "https://rental-management.iot-exhibit.workers.dev/api";
+  const messageBox = document.getElementById("message");
+
+  function showMessage(text, type) {
+    messageBox.className = `message ${type}`;
+    messageBox.textContent = text;
+    messageBox.style.display = "block";
+  }
 
   async function submitLogIn(event) {
     event.preventDefault();
+    messageBox.style.display = "none";
 
-    const email = document.getElementById("email").value;
+    const email = document.getElementById("email").value.trim();
     const password = document.getElementById("password").value;
 
     try {
@@ -196,53 +206,25 @@
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.error || "Login failed");
+        showMessage(data.error || "Login failed", "error");
         return;
       }
 
-      console.log("Logged in:", data);
-
-      // Save tokens in localStorage (or sessionStorage)
       localStorage.setItem("accessToken", data.accessToken);
       localStorage.setItem("refreshToken", data.refreshToken);
 
-      alert("Login successful!");
-      // Redirect to dashboard
-      window.location.href = "/dashboard.html";
+      showMessage("Login successful. Redirecting…", "success");
+
+      setTimeout(() => {
+        window.location.href = "/dashboard.html";
+      }, 800);
 
     } catch (err) {
       console.error(err);
-      alert("Something went wrong");
-    }
-  }
-
-  // Example: token refresh
-  async function refreshAccessToken() {
-    const refreshToken = localStorage.getItem("refreshToken");
-    if (!refreshToken) return null;
-
-    try {
-      const res = await fetch(`${API_URL}/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        console.log("Refresh token invalid");
-        return null;
-      }
-
-      localStorage.setItem("accessToken", data.accessToken);
-      return data.accessToken;
-
-    } catch (err) {
-      console.error(err);
-      return null;
+      showMessage("Network error. Please try again.", "error");
     }
   }
 </script>
+
 </body>
 </html>
