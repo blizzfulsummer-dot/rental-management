@@ -173,7 +173,7 @@ function renderSettings(){
         <td><button onclick="deleteHome(${h.id})">Delete</button></td></tr>`).join("")}
       </table>
       <input id="homeName" placeholder="Home name">
-      <button onclick="addHome()">Add</button>
+      <button class="primary" onclick="addHome()">Add</button>
     </div>
 
     <div class="card" style="margin-top:1rem">
@@ -186,7 +186,7 @@ function renderSettings(){
       <select id="devHome">${homes.map(h=>`<option value="${h.id}">${h.name}</option>`)}</select>
       <input id="devName" placeholder="Device name">
       <input id="devPin" type="number" placeholder="Pin">
-      <button onclick="addDevice()">Add</button>
+      <button class="primary" onclick="addDevice()">Add</button>
     </div>`;
 }
 
@@ -222,7 +222,10 @@ function renderTenantView(){
       <tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>
       ${tenants.map(t=>`
         <tr><td>${t.name}</td><td>${t.email}</td><td>${t.role}</td>
-        <td><button onclick="deleteTenant(${t.id})">Delete</button></td></tr>`).join("")}
+        <td>
+          <button class="primary" onclick="renderEditTenant(${t.id})">Edit</button>
+          <button onclick="deleteTenant(${t.id})">Delete</button></td>
+          </tr>`).join("")}
     </table>`;
 }
 
@@ -245,6 +248,43 @@ function deleteTenant(id){
     tenants=tenants.filter(t=>t.id!==id);
     renderTenantView();
   });
+}
+
+function updateTenant(id){
+  const tenant = tenants.find(t=>t.id===id);
+  if(!tenant) return;
+
+  tenant.name = editName.value.trim();
+  tenant.email = editEmail.value.trim();
+  tenant.role = editRole.value;
+
+  renderTenantView();
+}
+
+function renderEditTenant(id){
+  const tenant = tenants.find(t=>t.id===id);
+  if(!tenant) return;
+
+  app.innerHTML=`
+    <div class="nav-back" onclick="renderTenantView()">← Back</div>
+
+    <div class="form-card">
+      <h3>Edit Account</h3>
+
+      <input id="editName" value="${tenant.name}" placeholder="Name">
+      <input id="editEmail" value="${tenant.email}" placeholder="Email">
+
+      <select id="editRole">
+        <option value="Tenant" ${tenant.role==="Tenant"?"selected":""}>Tenant</option>
+        <option value="Admin" ${tenant.role==="Admin"?"selected":""}>Admin</option>
+      </select>
+
+      <div style="display:flex;gap:.5rem;margin-top:1rem">
+        <button class="primary" onclick="updateTenant(${id})">Save</button>
+        <button onclick="renderTenantView()">Cancel</button>
+      </div>
+    </div>
+  `;
 }
 
 /* ================= TOGGLE ================= */
