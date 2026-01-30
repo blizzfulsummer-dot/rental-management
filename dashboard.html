@@ -91,11 +91,11 @@ footer{text-align:center;padding:1rem;color:var(--muted)}
 const app = document.getElementById("app");
 
 async function verifyUser() {
-  let accessToken = localStorage.getItem("accessToken");
+  const accessToken = localStorage.getItem("accessToken");
   const refreshToken = localStorage.getItem("refreshToken");
 
   if (!accessToken) {
-    window.location.href = "/login.html";
+    app.innerHTML = "<p style='color:red;'>No access token found. Please log in.</p>";
     return;
   }
 
@@ -105,41 +105,16 @@ async function verifyUser() {
     });
 
     if (res.ok) {
-      const data = await res.json();
-      console.log("User:", data.user);
-      // you can store or display username
-      // document.getElementById("username").textContent = data.user.name;
-    } else if (res.status === 401 && refreshToken) {
-      // Try refreshing token
-      const refreshRes = await fetch(`${API_URL}/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken })
-      });
-
-      if (refreshRes.ok) {
-        const newTokens = await refreshRes.json();
-        localStorage.setItem("accessToken", newTokens.accessToken);
-        // 🔹 reload page once instead of recursive call
-        window.location.reload();
-      } else {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        window.location.href = "/login.html";
-      }
+      const { user } = await res.json();
+      app.innerHTML = `<p style="color:green;">User verified: ${user.name} (${user.role})</p>`;
     } else {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      window.location.href = "/login.html";
+      const data = await res.json();
+      app.innerHTML = `<p style="color:red;">Verification failed: ${data.error || res.status}</p>`;
     }
   } catch (err) {
-    console.error(err);
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    window.location.href = "/login.html";
+    app.innerHTML = `<p style="color:red;">Network or server error: ${err.message}</p>`;
   }
 }
-
 
 // Run verification as soon as dashboard loads
 verifyUser(); 
