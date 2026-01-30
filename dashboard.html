@@ -101,8 +101,8 @@ let devices=[
 ];
 
 let tenants=[
-  {id:1,name:"John Doe",email:"john@example.com",role:"Tenant"},
-  {id:2,name:"Admin User",email:"admin@example.com",role:"Admin"}
+  {id:1,name:"John Doe",email:"john@example.com",role:"Tenant", rent_amount:1000},
+  {id:2,name:"Admin User",email:"admin@example.com",role:"Admin", rent_amount:2000}
 ];
 
 let modalAction=null;
@@ -125,7 +125,7 @@ function renderDashboard(){
     <div class="stats">
       <div class="stat"><span>Devices</span><strong>${devices.length}</strong></div>
       <div class="stat"><span>Tenants</span><strong>${tenants.length}</strong></div>
-      <div class="stat"><span>Income</span><strong>$4,500</strong></div>
+      <div class="stat"><span>Income</span><strong>₱4,500</strong></div>
     </div>
 
     <div class="dashboard-grid">
@@ -171,7 +171,7 @@ function renderSettings(){
       ${homes.map(h=>`
         <tr><td>${h.name}</td>
         <td>
-            <button class="primary" onclick="renderEditHome(${h.id})">Edit</button>
+            <button onclick="renderEditHome(${h.id})">Edit</button>
             <button onclick="deleteHome(${h.id})">Delete</button></td></tr>`).join("")}
       </table>
       <input id="homeName" placeholder="Home name">
@@ -184,7 +184,7 @@ function renderSettings(){
       ${devices.map(d=>`
         <tr><td>${d.name}</td><td>${d.pin}</td>
         <td>
-            <button class="primary" onclick="renderEditDevice(${d.id})">Edit</button>
+            <button onclick="renderEditDevice(${d.id})">Edit</button>
             <button onclick="deleteDevice(${d.id})">Delete</button></td></tr>`).join("")}
       </table>
       <select id="devHome">${homes.map(h=>`<option value="${h.id}">${h.name}</option>`)}</select>
@@ -219,6 +219,42 @@ function deleteDevice(id){
 }
 
 /* ================= TENANTS ================= */
+function renderTenantView() {
+  app.innerHTML = `
+    <div class="nav-back" onclick="renderDashboard()">← Back</div>
+    <table class="tenant-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Rent</th>
+          <th>Balance</th>
+          <th>Onboard Date</th>
+          <th>Role</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${tenants.map(t => `
+          <tr>
+            <td>${t.name}</td>
+            <td>${t.email}</td>
+            <td>${t.rent_amount ? "₱" + t.rent_amount : "-"}</td>
+            <td>${t.balance ? "₱" + t.balance : "-"}</td>
+            <td>${t.onboard_date || "-"}</td>
+            <td>${t.role}</td>
+            <td>
+              <button class="primary" onclick="renderEditTenant(${t.id})">&nbsp;Edit &#9745;</button>
+              <button onclick="deleteTenant(${t.id})">Delete</button>
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+/*
 function renderTenantView(){
   app.innerHTML=`
     <div class="nav-back" onclick="renderDashboard()">← Back</div>
@@ -226,13 +262,113 @@ function renderTenantView(){
       <tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>
       ${tenants.map(t=>`
         <tr><td>${t.name}</td><td>${t.email}</td><td>${t.role}</td>
-        <td>
-          <button class="primary" onclick="renderEditTenant(${t.id})">Edit</button>
-          <button onclick="deleteTenant(${t.id})">Delete</button></td>
-          </tr>`).join("")}
+            
+        <td><button class="primary" onclick="renderEditTenant(${t.id})">Edit</button>
+            <button onclick="deleteTenant(${t.id})">Delete</button></td></tr>`).join("")}
     </table>`;
+}*/
+
+function renderTenantForm(){
+  app.innerHTML = `
+    <div class="nav-back" onclick="renderDashboard()">← Back</div>
+
+    <div class="form-card">
+      <h3>Register Account</h3>
+
+      <!-- Role -->
+      <div style="margin-bottom:1rem">
+        <label>
+          <input type="radio" name="role" value="Tenant" checked>
+          Tenant
+        </label>
+        &nbsp;&nbsp;
+        <label>
+          <input type="radio" name="role" value="User">
+          User
+        </label>
+         &nbsp;&nbsp;
+        <label>
+          <input type="radio" name="role" value="Admin">
+          Admin
+        </label>
+      </div>
+
+      <input id="tName" placeholder="Name">
+      <input id="tEmail" placeholder="Email">
+
+      <!-- Tenant-only fields (hidden by default) -->
+      <div id="tenant-fields" style="display:none;margin-top:1rem">
+        <input id="rent_amount" type="number" placeholder="Rent Amount">
+        <input id="deposit" type="number" placeholder="Deposit">
+        <input id="balance" type="number" placeholder="Balance" style="margin-top:.6rem">
+
+        <label for="onboard_date" style="display:block;margin-top:.6rem;font-size:.85rem;color:#6b7280">&nbsp; On Board Date</label><input id="onboard_date" type="date">
+
+        <div style="margin-top:.8rem">
+          <small>Billing Cycle</small><br>
+          <label>
+            <input type="radio" name="billing_cycle" value="daily">
+            Daily
+          </label>
+          &nbsp;
+          <label>
+            <input type="radio" name="billing_cycle" value="weekly">
+            Weekly
+          </label>
+          &nbsp;
+          <label>
+            <input type="radio" name="billing_cycle" value="monthly" checked>
+            Monthly
+          </label>
+        </div>
+      </div>
+
+      <button class="primary" onclick="addTenant()">Create</button>
+    </div>
+  `;
+
+  setupRoleToggle();
 }
 
+function setupRoleToggle() {
+  const radios = document.querySelectorAll('input[name="role"]');
+  const tenantFields = document.getElementById("tenant-fields");
+
+  const update = () => {
+    const role = document.querySelector('input[name="role"]:checked')?.value;
+    tenantFields.style.display = role === "Tenant" ? "block" : "none";
+  };
+
+  radios.forEach(r => r.addEventListener("change", update));
+
+  update(); // 🔥 THIS is what you were missing
+}
+
+
+function addTenant() {
+  const role = document.querySelector('input[name="role"]:checked')?.value;
+  if (!role) return alert("Select role");
+
+  const data = {
+    id: Date.now(),
+    name: tName.value,
+    email: tEmail.value,
+    role
+  };
+
+  if (role === "Tenant") {
+    data.rent_amount = Number(rent_amount.value || 0);
+    data.balance = Number(balance.value || 0);
+    data.onboard_date = onboard_date.value;
+    data.billing_cycle =
+      document.querySelector('input[name="billing_cycle"]:checked')?.value || "monthly";
+  }
+
+  tenants.push(data);
+  renderTenantView();
+}
+
+/*
 function renderTenantForm(){
   app.innerHTML=`
     <div class="nav-back" onclick="renderDashboard()">← Back</div>
@@ -241,18 +377,7 @@ function renderTenantForm(){
       <input id="tEmail" placeholder="Email">
       <button class="primary" onclick="addTenant()">Create</button>
     </div>`;
-}
-
-function addTenant(){
-  tenants.push({id:Date.now(),name:tName.value,email:tEmail.value,role:"Tenant"});
-  renderTenantView();
-}
-function deleteTenant(id){
-  openModal("Delete tenant?",()=>{
-    tenants=tenants.filter(t=>t.id!==id);
-    renderTenantView();
-  });
-}
+}*/
 
 function updateTenant(id){
   const tenant = tenants.find(t=>t.id===id);
@@ -264,6 +389,7 @@ function updateTenant(id){
 
   renderTenantView();
 }
+
 
 function renderEditTenant(id){
   const tenant = tenants.find(t=>t.id===id);
@@ -289,6 +415,18 @@ function renderEditTenant(id){
       </div>
     </div>
   `;
+}
+
+
+function addTenant(){
+  tenants.push({id:Date.now(),name:tName.value,email:tEmail.value,role:"Tenant"});
+  renderTenantView();
+}
+function deleteTenant(id){
+  openModal("Delete tenant?",()=>{
+    tenants=tenants.filter(t=>t.id!==id);
+    renderTenantView();
+  });
 }
 
 function renderEditHome(id){
@@ -360,7 +498,9 @@ function updateDevice(id){
   renderSettings();
 }
 
-  
+
+
+
 /* ================= TOGGLE ================= */
 document.addEventListener("click",e=>{
   if(e.target.classList.contains("toggle"))e.target.classList.toggle("active");
