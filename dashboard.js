@@ -11,7 +11,8 @@ const state = {
     { id: 1, homeId: 1, name: 'Living Room Light', pin: 15 },
     { id: 2, homeId: 2, name: 'Pool Light', pin: 4 }
   ],
-  tenants: []
+  tenants: [],
+  selectedHomeId: null
 };
 
 function escapeHtml(value) {
@@ -101,15 +102,37 @@ function renderDashboard() {
 function renderIOT() {
   app.innerHTML = `
     <div class="nav-back" onclick="renderDashboard()">← Back</div>
+    <h2 style="margin-bottom: 1.5rem;">Select a House</h2>
     <div class="grid">
-      ${state.devices.map((device) => `
-        <div class="device-card">
-          <h3>${escapeHtml(device.name)}</h3>
-          <p>Pin ${device.pin}</p>
-          <div class="toggle active"></div>
+      ${state.homes.map((home) => `
+        <div class="device-card" style="cursor: pointer; transition: transform 0.2s;" onclick="renderIOTDevices(${home.id})" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+          <h3>🏠 ${escapeHtml(home.name)}</h3>
+          <p>${state.devices.filter(d => d.homeId === home.id).length} device(s)</p>
         </div>
       `).join('')}
     </div>
+  `;
+}
+
+function renderIOTDevices(homeId) {
+  state.selectedHomeId = homeId;
+  const selectedHome = state.homes.find(h => h.id === homeId);
+  const homeDevices = state.devices.filter(d => d.homeId === homeId);
+
+  app.innerHTML = `
+    <div class="nav-back" onclick="renderIOT()">← Back to Houses</div>
+    <h2 style="margin-bottom: 1.5rem;">🏠 ${escapeHtml(selectedHome.name)}</h2>
+    ${homeDevices.length ? `
+      <div class="grid">
+        ${homeDevices.map((device) => `
+          <div class="device-card" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+            <h3>${escapeHtml(device.name)}</h3>
+            <p>Pin ${device.pin}</p>
+            <div class="toggle active" onclick="event.stopPropagation()"></div>
+          </div>
+        `).join('')}
+      </div>
+    ` : `<div class="empty-state">No devices in this house yet.</div>`}
   `;
 }
 
