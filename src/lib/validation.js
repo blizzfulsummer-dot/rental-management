@@ -84,7 +84,7 @@ export function validateSignupPayload(payload) {
     errors.push('code');
   }
 
-  if (role !== 'admin' && !payload.password && !payload.code) {
+  if (role !== 'admin' && role !== 'tenant' && !payload.password && !payload.code) {
     errors.push('password');
   }
 

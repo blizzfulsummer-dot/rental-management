@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose';
-import { parseJsonBody, validateEmail, validateLoginPayload, validatePassword, validateSignupPayload, validateTenantPayload, sanitizeString } from './lib/validation.js';
+import { parseJsonBody, validateEmail, validateId, validateLoginPayload, validatePassword, validateSignupPayload, validateTenantPayload, sanitizeString } from './lib/validation.js';
 import { hashPBKDF2, verifyPBKDF2, verifyLegacy, fakeVerify, arrayBufferToHex, hexToArrayBuffer, generateTempPassword } from './lib/crypto.js';
 
 
@@ -26,11 +26,32 @@ export async function signup(request, env) {
   let tempPassword = null;
   let mustChangePassword = 0;
   let tempPasswordExpires = null;
+  let tenantHouseId = null;
+  let tenantCreator = null;
 
   if (role === 'tenant' || role === 'user') {
-    const authUser = await getAuthUser(request, env);
-    if (authUser.error) return json({ error: authUser.error }, authUser.status || 401);
-    if (authUser.user.role !== 'admin') return json({ error: 'Forbidden' }, 403);
+    const authResult = await getAuthUser(request, env);
+    if (authResult.error) return json({ error: authResult.error }, authResult.status || 401);
+    if (role === 'user' && authResult.user.role !== 'admin') return json({ error: 'Forbidden' }, 403);
+    if (role === 'tenant' && authResult.user.role !== 'admin' && authResult.user.role !== 'owner') {
+      return json({ error: 'Forbidden' }, 403);
+    }
+
+    if (role === 'tenant') {
+      tenantCreator = authResult.user;
+      const tenantValidation = validateTenantPayload(payload);
+      if (!tenantValidation.ok) return json({ error: 'Invalid tenant fields', details: tenantValidation.errors }, 400);
+
+      if (payload.house_id !== undefined && payload.house_id !== null && payload.house_id !== '') {
+        const houseValidation = validateId(payload.house_id);
+        if (!houseValidation.ok) return json({ error: 'Invalid house ID' }, 400);
+        tenantHouseId = houseValidation.value;
+      }
+
+      if (tenantCreator.role === 'owner' && !tenantHouseId) {
+        return json({ error: 'house_id is required for owner-created tenants' }, 400);
+      }
+    }
 
     tempPassword = generateTempPassword();
     finalPassword = tempPassword;
@@ -50,6 +71,13 @@ export async function signup(request, env) {
   }
 
   try {
+    if (role === 'tenant' && tenantHouseId) {
+      const house = tenantCreator.role === 'owner'
+        ? await env.DB.prepare('SELECT id FROM houses WHERE id = ? AND owner_id = ?').bind(tenantHouseId, tenantCreator.id).first()
+        : await env.DB.prepare('SELECT id FROM houses WHERE id = ?').bind(tenantHouseId).first();
+      if (!house) return json({ error: tenantCreator.role === 'owner' ? 'Forbidden' : 'House not found' }, tenantCreator.role === 'owner' ? 403 : 404);
+    }
+
     const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(normalizedEmail).first();
     if (existing) return json({ error: 'Email already exists' }, 400);
 
@@ -66,9 +94,6 @@ export async function signup(request, env) {
     if (!userId) return json({ error: 'Failed to create user' }, 500);
 
     if (role === 'tenant') {
-      const tenantValidation = validateTenantPayload(payload);
-      if (!tenantValidation.ok) return json({ error: 'Invalid tenant fields', details: tenantValidation.errors }, 400);
-
       await env.DB
         .prepare(`
           INSERT INTO tenants (user_id, balance, deposit, rent_amount, billing_cycle, leased_unit, onboard_date, created_at)
@@ -85,6 +110,16 @@ export async function signup(request, env) {
           new Date().toISOString()
         )
         .run();
+
+      if (tenantHouseId) {
+        await env.DB
+          .prepare(`
+            INSERT OR IGNORE INTO user_house_access (user_id, house_id, access_level, created_at)
+            VALUES (?, ?, 'tenant', ?)
+          `)
+          .bind(userId, tenantHouseId, new Date().toISOString())
+          .run();
+      }
     }
 
     if (role === 'admin') {

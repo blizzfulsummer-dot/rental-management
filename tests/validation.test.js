@@ -23,6 +23,16 @@ test('validateSignupPayload accepts owner role', () => {
   assert.deepEqual(result.errors, []);
 });
 
+test('validateSignupPayload allows generated-password tenant registration', () => {
+  const result = validateSignupPayload({
+    email: 'tenant@example.com',
+    role: 'tenant'
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
 test('validateTenantPayload rejects missing tenant fields', () => {
   const result = validateTenantPayload({
     balance: 100,

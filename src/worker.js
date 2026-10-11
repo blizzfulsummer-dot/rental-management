@@ -193,8 +193,12 @@ export default {
     .subtle { color: var(--muted); margin-bottom: 26px; line-height: 1.5; }
     .field { margin-bottom: 16px; }
     .field label { display: block; margin-bottom: 8px; font-weight: 600; }
-    .field input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: #fff; color: var(--text); }
-    .field input:focus { outline: 2px solid rgba(59,130,246,0.25); border-color: var(--primary); }
+    .field input, .field select { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: #fff; color: var(--text); }
+    .field input:focus, .field select:focus { outline: 2px solid rgba(59,130,246,0.25); border-color: var(--primary); }
+    .tenant-registration-form { display: grid; gap: 14px; margin-bottom: 24px; padding: 18px; border: 1px solid var(--border); border-radius: 16px; background: #f7f9ff; }
+    .tenant-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .tenant-registration-form .field { margin-bottom: 0; }
+    .tenant-registration-form .primary-btn { width: auto; justify-self: start; }
     .primary-btn, .ghost-btn, .secondary-btn { border: none; border-radius: 12px; padding: 12px 16px; font-weight: 700; cursor: pointer; }
     .primary-btn { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; width: 100%; }
     .ghost-btn { background: #eef4ff; color: var(--primary-dark); }
@@ -376,7 +380,7 @@ export default {
         ['House', assignedHouse ? assignedHouse.name : 'No assigned house'],
         ['Location', assignedHouse ? (assignedHouse.location || 'N/A') : 'N/A']
       ];
-      profilePanel.innerHTML = values.map(function(pair) { return '<div class="profile-line"><span class="label">' + pair[0] + '</span><strong>' + pair[1] + '</strong></div>'; }).join('');
+      profilePanel.innerHTML = values.map(function(pair) { return '<div class="profile-line"><span class="label">' + escapeHtml(pair[0]) + '</span><strong>' + escapeHtml(pair[1]) + '</strong></div>'; }).join('');
     }
     function renderHouseList() {
       if (!state.houses.length) {
@@ -397,14 +401,76 @@ export default {
       });
     }
     function renderTenantList() {
-      if (!state.tenants.length) {
-        mainPanelContent.innerHTML = '<div class="empty">No tenants assigned to this account scope.</div>';
-        return;
-      }
-      const html = state.tenants.map(function(tenant) {
-        return '<div class="tenant-card"><h3>' + (tenant.name || tenant.email || 'Tenant') + '</h3><div class="meta">' + (tenant.email || 'No email') + '<br />Unit: ' + (tenant.leased_unit || 'N/A') + '<br />Rent: ' + (tenant.rent_amount || 'N/A') + '</div><div class="tag">Tenant</div></div>';
+      const registrableHouses = state.role === 'admin'
+        ? state.houses
+        : state.houses.filter(function(house) { return Number(house.owner_id) === Number(state.profile.id); });
+      const houseOptions = registrableHouses.map(function(house) {
+        const name = escapeHtml(house.name || 'House ' + house.id);
+        const location = house.location ? ' - ' + escapeHtml(house.location) : '';
+        return '<option value="' + escapeHtml(house.id) + '">' + name + location + '</option>';
       }).join('');
-      mainPanelContent.innerHTML = '<div class="card-grid">' + html + '</div>';
+      const html = state.tenants.map(function(tenant) {
+        return '<div class="tenant-card"><h3>' + escapeHtml(tenant.name || tenant.email || 'Tenant') + '</h3><div class="meta">' + escapeHtml(tenant.email || 'No email') + '<br />Unit: ' + escapeHtml(tenant.leased_unit || 'N/A') + '<br />Rent: ' + escapeHtml(tenant.rent_amount || 'N/A') + '</div><div class="tag">Tenant</div></div>';
+      }).join('');
+      mainPanelContent.innerHTML = '<form id="tenantRegistrationForm" class="tenant-registration-form">' +
+        '<h3>Register a tenant</h3>' +
+        '<div class="tenant-form-grid">' +
+          '<div class="field"><label for="tenantName">Full name</label><input id="tenantName" name="name" type="text" maxlength="100" autocomplete="name" required /></div>' +
+          '<div class="field"><label for="tenantEmail">Email</label><input id="tenantEmail" name="email" type="email" autocomplete="email" required /></div>' +
+          '<div class="field"><label for="tenantHouse">House</label><select id="tenantHouse" name="house_id" required><option value="">Select a house</option>' + (houseOptions || '<option value="" disabled>No houses available</option>') + '</select></div>' +
+          '<div class="field"><label for="tenantUnit">Leased unit</label><input id="tenantUnit" name="leased_unit" type="text" required /></div>' +
+          '<div class="field"><label for="tenantRent">Rent amount</label><input id="tenantRent" name="rent_amount" type="number" min="0" step="0.01" required /></div>' +
+          '<div class="field"><label for="tenantDeposit">Deposit</label><input id="tenantDeposit" name="deposit" type="number" min="0" step="0.01" value="0" required /></div>' +
+          '<div class="field"><label for="tenantBalance">Balance</label><input id="tenantBalance" name="balance" type="number" min="0" step="0.01" value="0" required /></div>' +
+          '<div class="field"><label for="tenantBillingCycle">Billing cycle</label><select id="tenantBillingCycle" name="billing_cycle" required><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option></select></div>' +
+          '<div class="field"><label for="tenantOnboardDate">Move-in date</label><input id="tenantOnboardDate" name="onboard_date" type="date" value="' + new Date().toISOString().slice(0, 10) + '" required /></div>' +
+        '</div>' +
+        '<button class="primary-btn" type="submit" ' + (registrableHouses.length ? '' : 'disabled') + '>Register tenant</button>' +
+        (registrableHouses.length ? '' : '<p class="meta">Add a house you manage before registering a tenant.</p>') +
+        '<div id="tenantRegistrationAlert" class="alert" role="status" aria-live="polite"></div>' +
+        '</form>' +
+        (html ? '<div class="card-grid">' + html + '</div>' : '<div class="empty">No tenants assigned to this account scope.</div>');
+      document.getElementById('tenantRegistrationForm').addEventListener('submit', handleTenantRegistration);
+    }
+    async function handleTenantRegistration(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const submitButton = form.querySelector('button[type="submit"]');
+      const formData = new FormData(form);
+      const payload = {
+        role: 'tenant',
+        name: formData.get('name'),
+        email: formData.get('email'),
+        house_id: Number(formData.get('house_id')),
+        leased_unit: formData.get('leased_unit'),
+        rent_amount: Number(formData.get('rent_amount')),
+        deposit: Number(formData.get('deposit')),
+        balance: Number(formData.get('balance')),
+        billing_cycle: formData.get('billing_cycle'),
+        onboard_date: formData.get('onboard_date')
+      };
+      submitButton.disabled = true;
+      try {
+        const result = await requestJson(API_BASE + '/api/signup', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload)
+        });
+        state.tenants.unshift({
+          name: payload.name,
+          email: payload.email,
+          leased_unit: payload.leased_unit,
+          rent_amount: payload.rent_amount
+        });
+        renderStats();
+        renderMainPanel();
+        showAlert(document.getElementById('tenantRegistrationAlert'), result.tempPassword
+          ? 'Tenant registered. Share this temporary password securely: ' + result.tempPassword + '. They must change it after signing in.'
+          : result.message || 'Tenant registered successfully.', 'success');
+      } catch (error) {
+        showAlert(document.getElementById('tenantRegistrationAlert'), error.message || 'Tenant registration failed.', 'error');
+        submitButton.disabled = false;
+      }
     }
     function renderDeviceList() {
       if (!state.houses.length) {
@@ -758,7 +824,7 @@ export default {
           const panel = document.createElement('div');
           panel.className = 'card-grid';
           panel.innerHTML = state.tenants.map(function(tenant) {
-            return '<div class="tenant-card"><h3>' + (tenant.name || tenant.email || 'Tenant') + '</h3><div class="meta">' + (tenant.email || 'No email') + '<br />Unit: ' + (tenant.leased_unit || 'N/A') + '<br />Rent: ' + (tenant.rent_amount || 'N/A') + '</div><div class="tag">Tenant</div></div>';
+            return '<div class="tenant-card"><h3>' + escapeHtml(tenant.name || tenant.email || 'Tenant') + '</h3><div class="meta">' + escapeHtml(tenant.email || 'No email') + '<br />Unit: ' + escapeHtml(tenant.leased_unit || 'N/A') + '<br />Rent: ' + escapeHtml(tenant.rent_amount || 'N/A') + '</div><div class="tag">Tenant</div></div>';
           }).join('');
           mainPanelContent.appendChild(panel);
         }
