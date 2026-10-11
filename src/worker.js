@@ -233,6 +233,12 @@ export default {
     .profile-card { display: grid; gap: 10px; }
     .profile-line { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(148,163,184,0.25); }
     .label { color: var(--muted); }
+    .password-required-dialog { width: min(100% - 32px, 460px); padding: 28px; border: 1px solid var(--border); border-radius: 20px; color: var(--text); box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28); }
+    .password-required-dialog::backdrop { background: rgba(15, 23, 42, 0.68); }
+    .password-required-form { display: grid; gap: 14px; }
+    .password-required-form .field { margin: 0; }
+    .password-required-form input { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; }
+    .password-required-form .alert { margin-top: 0; }
     .empty { border: 1px dashed var(--border); border-radius: 16px; padding: 22px; color: var(--muted); text-align: center; background: rgba(255,255,255,0.4); }
     .house-selector { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; color: var(--muted); font-weight: 700; }
     .house-selector select { min-width: min(100%, 260px); padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: white; color: var(--text); font: inherit; }
@@ -292,6 +298,18 @@ export default {
       </div>
     </div>
   </div>
+
+  <dialog id="passwordRequiredDialog" class="password-required-dialog" aria-labelledby="passwordRequiredTitle">
+    <h2 id="passwordRequiredTitle">Change your password</h2>
+    <p class="subtle">For your security, you must choose a new password before continuing. Use at least 8 characters with uppercase and lowercase letters, a number, and a symbol.</p>
+    <form id="passwordRequiredForm" class="password-required-form">
+      <div class="field"><label for="requiredCurrentPassword">Current password</label><input id="requiredCurrentPassword" type="password" autocomplete="current-password" required /></div>
+      <div class="field"><label for="requiredNewPassword">New password</label><input id="requiredNewPassword" type="password" autocomplete="new-password" minlength="8" required /></div>
+      <div class="field"><label for="requiredConfirmPassword">Confirm new password</label><input id="requiredConfirmPassword" type="password" autocomplete="new-password" minlength="8" required /></div>
+      <button id="passwordRequiredSubmit" type="submit" class="primary-btn">Update password</button>
+      <div id="passwordRequiredAlert" class="alert" role="status" aria-live="polite"></div>
+    </form>
+  </dialog>
 
   <script>
     function resolveApiBase() {
@@ -986,12 +1004,14 @@ export default {
         const meData = meResponse.ok ? await meResponse.json() : null;
         if (!meData || !meData.user) throw new Error('Could not load user profile');
         state.profile = meData.user;
+        state.profile.requires_change_password = Number(meData.user.requires_change_password) === 1;
         state.role = String(meData.user.role || 'user').toLowerCase();
         state.activeView = 'overview';
         userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
         userRole.textContent = formatRole(state.role);
         renderViewTabs();
         setActiveScreen('dashboard');
+        if (state.profile.requires_change_password) document.getElementById('passwordRequiredDialog').showModal();
         clearAlert(passwordAlert);
         await loadDashboardData();
       } catch (error) {
@@ -1030,6 +1050,31 @@ export default {
         showAlert(passwordAlert, error.message || 'Password update failed.', 'error');
       }
     }
+    async function handleRequiredPasswordUpdate(event) {
+      event.preventDefault();
+      const currentPassword = document.getElementById('requiredCurrentPassword').value;
+      const newPassword = document.getElementById('requiredNewPassword').value;
+      const confirmPassword = document.getElementById('requiredConfirmPassword').value;
+      const submitButton = document.getElementById('passwordRequiredSubmit');
+      const alert = document.getElementById('passwordRequiredAlert');
+      if (newPassword !== confirmPassword) { showAlert(alert, 'The new passwords do not match.', 'error'); return; }
+      if (newPassword === currentPassword) { showAlert(alert, 'Choose a password different from your current password.', 'error'); return; }
+      submitButton.disabled = true;
+      try {
+        const result = await requestJson(API_BASE + '/api/update_password', {
+          method: 'POST',
+          body: JSON.stringify({ token: state.jwt, oldPassword: currentPassword, newPassword: newPassword })
+        });
+        state.profile.requires_change_password = false;
+        document.getElementById('passwordRequiredDialog').close();
+        document.getElementById('passwordRequiredForm').reset();
+        showAlert(passwordAlert, result.message || 'Password updated successfully.', 'success');
+      } catch (error) {
+        showAlert(alert, error.message || 'Password update failed.', 'error');
+      } finally {
+        submitButton.disabled = false;
+      }
+    }
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
     document.getElementById('refreshBtn').addEventListener('click', function() {
@@ -1038,6 +1083,8 @@ export default {
       loadDashboardData();
     });
     document.getElementById('passwordForm').addEventListener('submit', handlePasswordUpdate);
+    document.getElementById('passwordRequiredForm').addEventListener('submit', handleRequiredPasswordUpdate);
+    document.getElementById('passwordRequiredDialog').addEventListener('cancel', function(event) { event.preventDefault(); });
     document.addEventListener('keydown', function(event) { if (event.key === 'Enter' && loginScreen.classList.contains('active')) handleLogin(); });
   </script>
 </body>

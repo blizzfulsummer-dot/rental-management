@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SignJWT } from 'jose';
-import { verifyJwt } from '../src/auth.js';
+import { updatePassword, verifyJwt } from '../src/auth.js';
 import { createDevice, createHouse, getTenant, listHouseDevices, listHouses, listTenants, updateTenant } from '../src/tenant.js';
 
 async function hashPassword(password) {
@@ -34,8 +34,10 @@ async function createDb() {
   };
 
   const password = await hashPassword('OldPass123!');
+  const statements = [];
 
   return {
+    statements,
     db: {
       prepare(sql) {
         return {
@@ -79,6 +81,7 @@ async function createDb() {
                 return { results: [] };
               },
               async run() {
+                statements.push({ sql, values: args });
                 return { success: true };
               }
             };
@@ -98,6 +101,29 @@ test('tenant can fetch their own basic profile info', async () => {
   assert.equal(response.status, 200);
   assert.equal(payload.tenant.email, 'tenant@example.com');
   assert.equal(payload.tenant.name, 'Tenant User');
+});
+
+test('password update clears the forced-change flag and temporary expiration', async () => {
+  const { db, statements } = await createDb();
+  const token = await new SignJWT({ sub: 42 })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('15m')
+    .sign(new TextEncoder().encode('test-secret'));
+  const request = new Request('https://example.com/api/update_password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, oldPassword: 'OldPass123!', newPassword: 'NewPass456!' })
+  });
+
+  const response = await updatePassword(request, { DB: db, JWT_SCRT: 'test-secret' });
+  const payload = await response.json();
+  const update = statements.find(statement => statement.sql.includes('UPDATE users'));
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.success, true);
+  assert.match(update.sql, /requires_change_password = 0/);
+  assert.match(update.sql, /temp_password_expiration = NULL/);
 });
 
 test('tenant can update their own password via tenant endpoint', async () => {
@@ -352,7 +378,7 @@ test('profile endpoint includes assigned houses using production address column'
           return {
             async first() {
               if (sql.includes('FROM users WHERE id = ?')) {
-                return { id: 42, email: 'tenant@example.com', role: 'tenant', name: 'Tenant User' };
+                return { id: 42, email: 'tenant@example.com', role: 'tenant', name: 'Tenant User', requires_change_password: 1 };
               }
               return null;
             },
@@ -387,6 +413,7 @@ test('profile endpoint includes assigned houses using production address column'
 
   assert.equal(response.status, 200);
   assert.equal(result.user.role, 'tenant');
+  assert.equal(result.user.requires_change_password, 1);
   assert.equal(result.user.assigned_house.name, 'Main House');
   assert.equal(result.user.assigned_house.location, 'A-12');
   assert.equal(result.user.assigned_houses[0].id, 7);

@@ -205,7 +205,11 @@ export async function updatePassword(request, env) {
     if (!valid) return json({ error: 'Old password is incorrect' }, 401);
 
     const { hash: derivedBits, salt } = await hashPBKDF2(newPassword);
-    await env.DB.prepare('UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?').bind(arrayBufferToHex(derivedBits), arrayBufferToHex(salt), user.id).run();
+    await env.DB.prepare(`
+      UPDATE users
+      SET password_hash = ?, password_salt = ?, requires_change_password = 0, temp_password_expiration = NULL
+      WHERE id = ?
+    `).bind(arrayBufferToHex(derivedBits), arrayBufferToHex(salt), user.id).run();
 
     return json({ success: true, message: 'Password updated successfully' });
   } catch (error) {
@@ -316,7 +320,7 @@ export async function verifyJwt(request, env) {
   }
 
   try {
-    const user = await env.DB.prepare('SELECT id, email, role, name FROM users WHERE id = ?').bind(payload.sub).first();
+    const user = await env.DB.prepare('SELECT id, email, role, name, requires_change_password FROM users WHERE id = ?').bind(payload.sub).first();
     if (!user) return json({ error: 'User not found' }, 401);
 
     const assignedHouses = await getAssignedHouses(env, user);
