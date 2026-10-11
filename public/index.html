@@ -742,9 +742,7 @@
     }
 
     function renderTenantList() {
-      const registrableHouses = state.role === 'admin'
-        ? state.houses
-        : state.houses.filter(house => Number(house.owner_id) === Number(state.profile.id));
+      const registrableHouses = state.houses;
       const houseOptions = registrableHouses.map(house => `
         <option value="${escapeHtml(house.id)}">${escapeHtml(house.name || `House ${house.id}`)}${house.location ? ` - ${escapeHtml(house.location)}` : ''}</option>
       `).join('');

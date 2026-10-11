@@ -401,9 +401,7 @@ export default {
       });
     }
     function renderTenantList() {
-      const registrableHouses = state.role === 'admin'
-        ? state.houses
-        : state.houses.filter(function(house) { return Number(house.owner_id) === Number(state.profile.id); });
+      const registrableHouses = state.houses;
       const houseOptions = registrableHouses.map(function(house) {
         const name = escapeHtml(house.name || 'House ' + house.id);
         const location = house.location ? ' - ' + escapeHtml(house.location) : '';
