@@ -156,3 +156,45 @@ test('unregistered fingerprint recognition never unlocks the door', async () => 
   assert.equal(deviceMessages.length, 0);
   assert.equal(webSession.messages[0].accessGranted, false);
 });
+
+test('house room forwards enrollment progress to the enrolling user and device owners', async () => {
+  const room = new HouseRoom({ id: 'house-10' }, {
+    DB: {
+      prepare(sql) {
+        assert.match(sql, /enrollment_pending = 1/);
+        return {
+          bind(deviceId, fingerprintId) {
+            assert.equal(deviceId, 7);
+            assert.equal(fingerprintId, 12);
+            return { first: async () => ({ user_id: 42 }) };
+          }
+        };
+      }
+    }
+  });
+  const enrollingUser = createSession('tenant', 7);
+  const otherUser = createSession('tenant', 7);
+  otherUser.userId = 99;
+  const owner = createSession('owner', 7);
+  const deviceSession = {
+    clientType: 'device',
+    deviceId: 7,
+    ws: { send() { assert.fail('Progress events must not be sent back to the device'); } }
+  };
+  room.sessions.set('enrolling-user', enrollingUser);
+  room.sessions.set('other-user', otherUser);
+  room.sessions.set('owner', owner);
+  room.sessions.set('device-session', deviceSession);
+
+  await room.handleFingerprintEvent('device-session', deviceSession, {
+    event: 'enrollment_remove_finger',
+    success: true,
+    id: 12,
+    message: 'Pull your finger away from the sensor'
+  });
+
+  assert.equal(enrollingUser.messages[0].event, 'enrollment_remove_finger');
+  assert.equal(enrollingUser.messages[0].deviceId, 7);
+  assert.equal(otherUser.messages.length, 0);
+  assert.equal(owner.messages[0].event, 'enrollment_remove_finger');
+});

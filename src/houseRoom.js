@@ -247,6 +247,16 @@ export class HouseRoom {
           SET enrollment_pending = 0, updated_at = ?
           WHERE device_id = ? AND fingerprint_id = ? AND status = 'active' AND enrollment_pending = 1
         `).bind(forwarded.timestamp, deviceSession.deviceId, fingerprintId).run();
+      } else if ([
+        'enrollment_place_finger',
+        'enrollment_remove_finger',
+        'enrollment_place_same_finger'
+      ].includes(message.event)) {
+        const enrollment = await this.env.DB.prepare(`
+          SELECT user_id FROM device_fingerprint_enrollments
+          WHERE device_id = ? AND fingerprint_id = ? AND enrollment_pending = 1
+        `).bind(deviceSession.deviceId, fingerprintId).first();
+        eventUserId = enrollment?.user_id ?? null;
       } else if (message.event === 'deleted' && message.success === true) {
         const enrollment = await this.env.DB.prepare(`
           SELECT user_id FROM device_fingerprint_enrollments

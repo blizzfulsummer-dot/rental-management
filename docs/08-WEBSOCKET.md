@@ -287,6 +287,31 @@ Status update from an IoT device.
 
 ---
 
+#### fingerprint.event (Device → Authorized Web Clients)
+
+Fingerprint enrollment progress and results are forwarded to the web client
+that reserved the enrollment, as well as device owners and admins. Progress
+events use the `fingerprint.event` type and include the device and template IDs:
+
+```json
+{
+  "type": "fingerprint.event",
+  "event": "enrollment_remove_finger",
+  "success": true,
+  "id": 12,
+  "deviceId": 123,
+  "message": "Pull your finger away from the sensor"
+}
+```
+
+The enrollment prompts are `enrollment_place_finger`,
+`enrollment_remove_finger`, and `enrollment_place_same_finger`.
+`enrollment_complete` and `enrollment_failed` report the final result.
+For progress events, `success: true` means enrollment is continuing, not
+that it has finished.
+
+---
+
 #### get_devices (Request device list)
 
 Request list of connected devices in the house.

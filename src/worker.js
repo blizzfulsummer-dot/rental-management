@@ -569,6 +569,10 @@ export default {
                   } else if (status) status.textContent = 'Place your finger on the sensor, then remove and scan it again.';
                 } else if (message.type === 'fingerprint.event' && Number(message.deviceId) === deviceId &&
                            Number(message.id) === Number(reservation.fingerprintId) &&
+                           ['enrollment_place_finger', 'enrollment_remove_finger', 'enrollment_place_same_finger'].includes(message.event)) {
+                  if (status) status.textContent = message.message || 'Follow the fingerprint sensor prompt.';
+                } else if (message.type === 'fingerprint.event' && Number(message.deviceId) === deviceId &&
+                           Number(message.id) === Number(reservation.fingerprintId) &&
                            (message.event === 'enrollment_complete' || message.event === 'enrollment_failed')) {
                   finish();
                   if (message.event === 'enrollment_complete' && message.success === true) resolve();

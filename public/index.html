@@ -981,6 +981,10 @@
                   }
                 } else if (message.type === 'fingerprint.event' && Number(message.deviceId) === deviceId &&
                            Number(message.id) === Number(reservation.fingerprintId) &&
+                           ['enrollment_place_finger', 'enrollment_remove_finger', 'enrollment_place_same_finger'].includes(message.event)) {
+                  if (status) status.textContent = message.message || 'Follow the fingerprint sensor prompt.';
+                } else if (message.type === 'fingerprint.event' && Number(message.deviceId) === deviceId &&
+                           Number(message.id) === Number(reservation.fingerprintId) &&
                            ['enrollment_complete', 'enrollment_failed'].includes(message.event)) {
                   finish();
                   resolve({ success: message.event === 'enrollment_complete' && message.success === true, message: message.message });
