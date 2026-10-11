@@ -10,7 +10,9 @@ import {
   getTenant,
   listHouseDevices,
   listHouses,
+  listProvisionableUsers,
   listTenants,
+  manageDeviceAccess,
   rotateDevicePairingKey,
   updateDevice,
   updateHouse,
@@ -235,7 +237,7 @@ export default {
     .house-selector { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; color: var(--muted); font-weight: 700; }
     .house-selector select { min-width: min(100%, 260px); padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: white; color: var(--text); font: inherit; }
     .device-edit-form { display: grid; gap: 10px; margin: 14px 0; }
-    .device-edit-form input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--text); }
+    .device-edit-form input, .device-edit-form select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--text); }
     .pairing-key-panel { margin: 14px 0; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #eff6ff; }
     .pairing-key-panel code { display: block; margin: 10px 0; padding: 10px; overflow-wrap: anywhere; background: white; border-radius: 8px; }
     @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .topbar { flex-direction: column; align-items: flex-start; } }
@@ -308,7 +310,7 @@ export default {
     }
 
     const API_BASE = resolveApiBase();
-    const state = { jwt: '', profile: null, role: null, houses: [], tenants: [], devices: [], fingerprints: {}, selectedHouseId: null, activeView: 'overview' };
+    const state = { jwt: '', profile: null, role: null, houses: [], tenants: [], devices: [], fingerprints: {}, provisionableUsers: [], deviceAccess: {}, selectedHouseId: null, activeView: 'overview' };
     const loginScreen = document.getElementById('loginScreen');
     const dashboardScreen = document.getElementById('dashboardScreen');
     const loginAlert = document.getElementById('loginAlert');
@@ -325,6 +327,11 @@ export default {
     function clearAlert(element) { element.textContent = ''; element.className = 'alert'; }
     function escapeHtml(value) { return String(value).replace(/[&<>"']/g, function(character) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]; }); }
     function formatRole(role) { return role ? role.toUpperCase() : 'USER'; }
+    function canManageDeviceAccess(device) {
+      if (state.role === 'admin') return true;
+      const house = state.houses.find(function(item) { return Number(item.id) === Number(device.house_id); });
+      return state.role === 'owner' && Number(house && house.owner_id) === Number(state.profile && state.profile.id);
+    }
     function getRoleViews() {
       if (state.role === 'admin' || state.role === 'owner') {
         return ['overview', 'houses', 'tenants', 'devices'];
@@ -486,12 +493,28 @@ export default {
         const management = state.role === 'admin' || state.role === 'owner';
         const enrollments = state.fingerprints[device.id] || [];
         const mine = enrollments.find(function(item) { return Number(item.user_id) === Number(state.profile && state.profile.id); });
+        const deviceUsers = state.deviceAccess[device.id] || [];
+        const deviceUserIds = new Set(deviceUsers.map(function(user) { return Number(user.id); }));
+        const availableUsers = state.provisionableUsers.filter(function(user) { return !deviceUserIds.has(Number(user.id)); });
+        const accessPanel = canManageDeviceAccess(device)
+          ? '<section class="device-edit-form"><strong>Provision user or tenant access</strong>' +
+            (availableUsers.length
+              ? '<form class="device-access-form" data-device-id="' + device.id + '"><select name="user_id" aria-label="User or tenant" required><option value="">Select a user or tenant</option>' +
+                availableUsers.map(function(user) { return '<option value="' + escapeHtml(user.id) + '">' + escapeHtml(user.name || user.email) + ' (' + escapeHtml(user.role) + ')</option>'; }).join('') +
+                '</select><button class="mini-btn" type="submit">Grant device access</button></form>'
+              : '<p class="meta">No additional users or tenants are available to assign.</p>') +
+            (deviceUsers.length
+              ? deviceUsers.map(function(user) { return '<div class="inline-actions"><span class="meta">' + escapeHtml(user.name || user.email) + ' (' + escapeHtml(user.role) + ')</span><button class="mini-btn danger" type="button" data-revoke-device-access="' + device.id + '" data-user-id="' + user.id + '">Revoke</button></div>'; }).join('')
+              : '<p class="meta">No users currently have access to this device.</p>') +
+            '</section>'
+          : '';
         const fingerprintRows = management ? enrollments.map(function(item) {
           return '<div class="inline-actions"><span class="meta">Slot ' + item.fingerprint_id + ': ' + escapeHtml(item.name || item.email || ('User ' + item.user_id)) + ': ' + escapeHtml(item.status) + (item.enrollment_pending ? ' (enrollment in progress)' : '') + '</span>' +
             (item.status !== 'disabled' ? '<button class="mini-btn" type="button" data-fingerprint-action="disable" data-device-id="' + device.id + '" data-fingerprint-id="' + item.fingerprint_id + '">Disable</button><button class="mini-btn" type="button" data-fingerprint-action="delete" data-device-id="' + device.id + '" data-fingerprint-id="' + item.fingerprint_id + '">Delete</button>' : '') + '</div>';
         }).join('') : '';
         const controls = '<div class="inline-actions"><button class="mini-btn" type="button" data-device-command="door.unlock" data-device-id="' + device.id + '">Unlock door (5 sec)</button><button class="mini-btn" type="button" data-device-command="door.lock" data-device-id="' + device.id + '">Lock door</button><button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="true" data-device-id="' + device.id + '">Relay 2 on</button><button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="false" data-device-id="' + device.id + '">Relay 2 off</button></div>' +
           '<div class="device-edit-form"><strong>Fingerprint access</strong><p class="meta">' + (mine ? 'Your fingerprint: slot ' + mine.fingerprint_id + ' (' + escapeHtml(mine.status) + (mine.enrollment_pending ? ', enrollment in progress' : '') + ')' : 'No fingerprint is registered for your account on this device.') + '</p><div class="inline-actions"><button class="mini-btn" type="button" data-fingerprint-enroll data-device-id="' + device.id + '">' + (mine && mine.status === 'active' ? 'Re-enroll my fingerprint' : 'Register my fingerprint') + '</button></div>' + fingerprintRows + '<div class="meta" data-fingerprint-status="' + device.id + '" aria-live="polite"></div></div>' +
+          accessPanel +
           (management
             ? '<form class="device-edit-form" data-device-id="' + device.id + '"><input name="name" aria-label="Device name" value="' + escapeHtml(device.device_name || '') + '" required /><input name="type" aria-label="Device type" value="' + escapeHtml(device.device_type || '') + '" required /><div class="inline-actions"><button class="mini-btn" type="submit">Save</button><button class="mini-btn" type="button" data-delete-device="' + device.id + '">Delete</button></div></form><div class="inline-actions"><span class="tag">' + (device.pairing_configured ? 'ESP32 paired' : 'ESP32 not paired') + '</span><button class="mini-btn" type="button" data-pair-device="' + device.id + '">' + (device.pairing_configured ? 'Regenerate pairing key' : 'Pair ESP32') + '</button></div>'
             : '');
@@ -510,6 +533,47 @@ export default {
         renderMainPanel();
       });
       const deviceNotice = document.getElementById('deviceNotice');
+      document.querySelectorAll('.device-access-form').forEach(function(form) {
+        form.addEventListener('submit', async function(event) {
+          event.preventDefault();
+          const deviceId = Number(form.dataset.deviceId);
+          const userId = Number(new FormData(form).get('user_id'));
+          const button = form.querySelector('button[type="submit"]');
+          button.disabled = true;
+          try {
+            const result = await requestJson(API_BASE + '/api/devices/' + deviceId + '/access', {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({ user_id: userId })
+            });
+            state.deviceAccess[deviceId] = (state.deviceAccess[deviceId] || []).concat(result.user);
+            renderMainPanel();
+            showAlert(document.getElementById('deviceNotice'), 'Device access granted to ' + (result.user.name || result.user.email) + '.', 'success');
+          } catch (error) {
+            showAlert(deviceNotice, error.message || 'Unable to grant device access.', 'error');
+            button.disabled = false;
+          }
+        });
+      });
+      document.querySelectorAll('[data-revoke-device-access]').forEach(function(button) {
+        button.addEventListener('click', async function() {
+          const deviceId = Number(button.dataset.revokeDeviceAccess);
+          const userId = Number(button.dataset.userId);
+          button.disabled = true;
+          try {
+            await requestJson(API_BASE + '/api/devices/' + deviceId + '/access/' + userId, {
+              method: 'DELETE',
+              headers: getAuthHeaders()
+            });
+            state.deviceAccess[deviceId] = (state.deviceAccess[deviceId] || []).filter(function(user) { return Number(user.id) !== userId; });
+            renderMainPanel();
+            showAlert(document.getElementById('deviceNotice'), 'Device access revoked.', 'success');
+          } catch (error) {
+            showAlert(deviceNotice, error.message || 'Unable to revoke device access.', 'error');
+            button.disabled = false;
+          }
+        });
+      });
       function showPairingKey(deviceId, pairingKey) {
         const notice = document.getElementById('deviceNotice');
         if (!notice) return;
@@ -871,12 +935,16 @@ export default {
       const headers = getAuthHeaders();
       state.devices = [];
       state.fingerprints = {};
+      state.deviceAccess = {};
       state.tenants = [];
+      state.provisionableUsers = [];
       try {
         const housesResponse = await fetch(API_BASE + '/api/houses', { headers: headers });
         const housesData = await housesResponse.json();
         state.houses = Array.isArray(housesData.houses) ? housesData.houses : (Array.isArray(housesData) ? housesData : []);
         if (state.role === 'admin' || state.role === 'owner') {
+          const usersData = await requestJson(API_BASE + '/api/provisioning/users', { headers: headers });
+          state.provisionableUsers = Array.isArray(usersData.users) ? usersData.users : [];
           const tenantsResponse = await fetch(API_BASE + '/api/tenants', { headers: headers });
           const tenantsData = await tenantsResponse.json();
           state.tenants = Array.isArray(tenantsData.tenants) ? tenantsData.tenants : [];
@@ -893,6 +961,10 @@ export default {
           const data = await response.json();
           if (!response.ok) throw new Error(data.error || 'Unable to load fingerprints for device ' + device.id);
           state.fingerprints[device.id] = Array.isArray(data.enrollments) ? data.enrollments : [];
+          if (canManageDeviceAccess(device)) {
+            const access = await requestJson(API_BASE + '/api/devices/' + device.id + '/access', { headers: headers });
+            state.deviceAccess[device.id] = Array.isArray(access.users) ? access.users : [];
+          }
         }));
         renderStats();
         renderProfile();
@@ -934,6 +1006,8 @@ export default {
       state.tenants = [];
       state.devices = [];
       state.fingerprints = {};
+      state.deviceAccess = {};
+      state.provisionableUsers = [];
       state.selectedHouseId = null;
       state.activeView = 'overview';
       document.getElementById('email').value = 'admin@example.com';
@@ -1040,6 +1114,10 @@ export default {
       const authUser = await getAuthUser(request, env);
       if (authUser.error) return withCors(json({ error: authUser.error }, authUser.status || 401), allowOrigin);
 
+      if (url.pathname === '/api/provisioning/users' && request.method === 'GET') {
+        return withCors(await listProvisionableUsers(request, env, authUser.user), allowOrigin);
+      }
+
       if (url.pathname === '/api/houses' && request.method === 'POST') {
         return withCors(await createHouse(request, env, authUser.user), allowOrigin);
       }
@@ -1097,6 +1175,18 @@ export default {
       if (url.pathname.startsWith('/api/devices/')) {
         const pathParts = url.pathname.split('/').filter(Boolean);
         const id = pathParts[2];
+
+        if (pathParts.length === 4 && pathParts[3] === 'access' && request.method === 'GET') {
+          return withCors(await manageDeviceAccess(request, env, authUser.user, id), allowOrigin);
+        }
+
+        if (pathParts.length === 4 && pathParts[3] === 'access' && request.method === 'POST') {
+          return withCors(await manageDeviceAccess(request, env, authUser.user, id), allowOrigin);
+        }
+
+        if (pathParts.length === 5 && pathParts[3] === 'access' && request.method === 'DELETE') {
+          return withCors(await manageDeviceAccess(request, env, authUser.user, id, pathParts[4]), allowOrigin);
+        }
 
         if (pathParts.length === 4 && pathParts[3] === 'fingerprints' && request.method === 'GET') {
           return withCors(await listFingerprintEnrollments(env, authUser.user, id), allowOrigin);

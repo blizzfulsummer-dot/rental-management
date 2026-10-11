@@ -406,7 +406,7 @@
       gap: 10px;
       margin: 14px 0;
     }
-    .device-edit-form input {
+    .device-edit-form input, .device-edit-form select {
       width: 100%;
       padding: 10px 12px;
       border: 1px solid var(--border);
@@ -553,6 +553,8 @@
       selectedHouseId: null,
       devices: [],
       fingerprints: {},
+      provisionableUsers: [],
+      deviceAccess: {},
       ws: null,
       activeView: 'overview'
     };
@@ -601,6 +603,12 @@
 
     function formatRole(role) {
       return role ? role.toUpperCase() : 'USER';
+    }
+
+    function canManageDeviceAccess(device) {
+      if (state.role === 'admin') return true;
+      const house = state.houses.find(item => Number(item.id) === Number(device.house_id));
+      return state.role === 'owner' && Number(house?.owner_id) === Number(state.profile?.id);
     }
 
     function getRoleViews() {
@@ -878,6 +886,9 @@
         ${(() => {
           const enrollments = state.fingerprints[device.id] || [];
           const mine = enrollments.find(item => Number(item.user_id) === Number(state.profile?.id));
+          const deviceUsers = state.deviceAccess[device.id] || [];
+          const deviceUserIds = new Set(deviceUsers.map(user => Number(user.id)));
+          const availableUsers = state.provisionableUsers.filter(user => !deviceUserIds.has(Number(user.id)));
           const fingerprintRows = enrollments.map(item => `
             <div class="inline-actions">
               <span class="meta">Slot ${item.fingerprint_id}: ${escapeHtml(item.name || item.email || `User ${item.user_id}`)}: ${escapeHtml(item.status)}${item.enrollment_pending ? ' (enrollment in progress)' : ''}</span>
@@ -909,6 +920,26 @@
             ${canManageDevices ? fingerprintRows : ''}
             <div class="meta" data-fingerprint-status="${device.id}" aria-live="polite"></div>
           </div>
+          ${canManageDeviceAccess(device) ? `
+            <section class="device-edit-form">
+              <strong>Provision user or tenant access</strong>
+              ${availableUsers.length ? `
+                <form class="device-access-form" data-device-id="${device.id}">
+                  <select name="user_id" aria-label="User or tenant" required>
+                    <option value="">Select a user or tenant</option>
+                    ${availableUsers.map(user => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || user.email)} (${escapeHtml(user.role)})</option>`).join('')}
+                  </select>
+                  <button class="mini-btn" type="submit">Grant device access</button>
+                </form>
+              ` : '<p class="meta">No additional users or tenants are available to assign.</p>'}
+              ${deviceUsers.length ? deviceUsers.map(user => `
+                <div class="inline-actions">
+                  <span class="meta">${escapeHtml(user.name || user.email)} (${escapeHtml(user.role)})</span>
+                  <button class="mini-btn danger" type="button" data-revoke-device-access="${device.id}" data-user-id="${user.id}">Revoke</button>
+                </div>
+              `).join('') : '<p class="meta">No users currently have access to this device.</p>'}
+            </section>
+          ` : ''}
           ${canManageDevices ? `
             <form class="device-edit-form" data-device-id="${device.id}">
               <input name="name" aria-label="Device name" value="${escapeHtml(device.device_name || '')}" required />
@@ -960,6 +991,47 @@
       });
 
       const deviceNotice = document.getElementById('deviceNotice');
+      document.querySelectorAll('.device-access-form').forEach(form => {
+        form.addEventListener('submit', async event => {
+          event.preventDefault();
+          const deviceId = Number(form.dataset.deviceId);
+          const userId = Number(new FormData(form).get('user_id'));
+          const button = form.querySelector('button[type="submit"]');
+          button.disabled = true;
+          try {
+            const result = await requestJson(`${API_BASE}/api/devices/${deviceId}/access`, {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({ user_id: userId })
+            });
+            state.deviceAccess[deviceId] = [...(state.deviceAccess[deviceId] || []), result.user];
+            renderMainPanel();
+            showAlert(document.getElementById('deviceNotice'), `Device access granted to ${result.user.name || result.user.email}.`, 'success');
+          } catch (error) {
+            showAlert(deviceNotice, error.message || 'Unable to grant device access.', 'error');
+            button.disabled = false;
+          }
+        });
+      });
+      document.querySelectorAll('[data-revoke-device-access]').forEach(button => {
+        button.addEventListener('click', async () => {
+          const deviceId = Number(button.dataset.revokeDeviceAccess);
+          const userId = Number(button.dataset.userId);
+          button.disabled = true;
+          try {
+            await requestJson(`${API_BASE}/api/devices/${deviceId}/access/${userId}`, {
+              method: 'DELETE',
+              headers: getAuthHeaders()
+            });
+            state.deviceAccess[deviceId] = (state.deviceAccess[deviceId] || []).filter(user => Number(user.id) !== userId);
+            renderMainPanel();
+            showAlert(document.getElementById('deviceNotice'), 'Device access revoked.', 'success');
+          } catch (error) {
+            showAlert(deviceNotice, error.message || 'Unable to revoke device access.', 'error');
+            button.disabled = false;
+          }
+        });
+      });
       function showPairingKey(deviceId, pairingKey) {
         const notice = document.getElementById('deviceNotice');
         if (!notice) return;
@@ -1396,14 +1468,17 @@
       const headers = getAuthHeaders();
       state.devices = [];
       state.fingerprints = {};
+      state.deviceAccess = {};
       state.tenants = [];
-
+      state.provisionableUsers = [];
       try {
         const housesResponse = await fetch(`${API_BASE}/api/houses`, { headers });
         const housesData = await housesResponse.json();
         state.houses = Array.isArray(housesData.houses) ? housesData.houses : (Array.isArray(housesData) ? housesData : []);
 
         if (state.role === 'admin' || state.role === 'owner') {
+          const provisionableUsers = await requestJson(`${API_BASE}/api/provisioning/users`, { headers });
+          state.provisionableUsers = Array.isArray(provisionableUsers.users) ? provisionableUsers.users : [];
           const tenantsResponse = await fetch(`${API_BASE}/api/tenants`, { headers });
           const tenantsData = await tenantsResponse.json();
           state.tenants = Array.isArray(tenantsData.tenants) ? tenantsData.tenants : [];
@@ -1426,6 +1501,10 @@
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || `Unable to load fingerprints for device ${device.id}`);
             state.fingerprints[device.id] = Array.isArray(data.enrollments) ? data.enrollments : [];
+            if (canManageDeviceAccess(device)) {
+              const access = await requestJson(`${API_BASE}/api/devices/${device.id}/access`, { headers });
+              state.deviceAccess[device.id] = Array.isArray(access.users) ? access.users : [];
+            }
           }));
         }
 
@@ -1494,6 +1573,8 @@
       state.tenants = [];
       state.devices = [];
       state.fingerprints = {};
+      state.deviceAccess = {};
+      state.provisionableUsers = [];
       state.selectedHouseId = null;
       state.activeView = 'overview';
       document.getElementById('email').value = 'admin@example.com';
