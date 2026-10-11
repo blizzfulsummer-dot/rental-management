@@ -32,13 +32,14 @@ export async function signup(request, env) {
   if (role === 'tenant' || role === 'user') {
     const authResult = await getAuthUser(request, env);
     if (authResult.error) return json({ error: authResult.error }, authResult.status || 401);
-    if (role === 'user' && authResult.user.role !== 'admin') return json({ error: 'Forbidden' }, 403);
-    if (role === 'tenant' && authResult.user.role !== 'admin' && authResult.user.role !== 'owner') {
-      return json({ error: 'Forbidden' }, 403);
+    const creatorRole = String(authResult.user.role || '').toLowerCase();
+    if (role === 'user' && creatorRole !== 'admin') return json({ error: 'Only admins can register users' }, 403);
+    if (role === 'tenant' && creatorRole !== 'admin' && creatorRole !== 'owner') {
+      return json({ error: 'Only owners and admins can register tenants' }, 403);
     }
 
     if (role === 'tenant') {
-      tenantCreator = authResult.user;
+      tenantCreator = { ...authResult.user, role: creatorRole };
       const tenantValidation = validateTenantPayload(payload);
       if (!tenantValidation.ok) return json({ error: 'Invalid tenant fields', details: tenantValidation.errors }, 400);
 
@@ -75,7 +76,13 @@ export async function signup(request, env) {
       const house = tenantCreator.role === 'owner'
         ? await env.DB.prepare('SELECT id FROM houses WHERE id = ? AND owner_id = ?').bind(tenantHouseId, tenantCreator.id).first()
         : await env.DB.prepare('SELECT id FROM houses WHERE id = ?').bind(tenantHouseId).first();
-      if (!house) return json({ error: tenantCreator.role === 'owner' ? 'Forbidden' : 'House not found' }, tenantCreator.role === 'owner' ? 403 : 404);
+      if (!house) {
+        return json({
+          error: tenantCreator.role === 'owner'
+            ? 'You can only register tenants for houses you own'
+            : 'House not found'
+        }, tenantCreator.role === 'owner' ? 403 : 404);
+      }
     }
 
     const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(normalizedEmail).first();

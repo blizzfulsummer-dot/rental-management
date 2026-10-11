@@ -86,6 +86,6 @@ test('owner cannot register a tenant in a house they do not own', async () => {
   const payload = await response.json();
 
   assert.equal(response.status, 403);
-  assert.equal(payload.error, 'Forbidden');
+  assert.equal(payload.error, 'You can only register tenants for houses you own');
   assert.equal(statements.some(({ sql }) => sql.includes('INSERT INTO users')), false);
 });
