@@ -474,28 +474,344 @@
       .topbar { flex-direction: column; align-items: flex-start; }
       .view-tabs { margin-top: 10px; }
     }
+
+    /* UI/UX refinement layer */
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #15803d;
+      --warning: #b45309;
+      --danger: #b91c1c;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 8px 24px rgba(15, 23, 42, .055);
+      --radius: 18px;
+    }
+    html { min-height: 100%; background: var(--bg); }
+    body {
+      min-height: 100vh;
+      background: radial-gradient(ellipse at top left, #eaf1ff 0, transparent 42%), var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select { font: inherit; }
+    button { touch-action: manipulation; }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, .28);
+      outline-offset: 2px;
+    }
+    .screen { min-height: 100vh; padding: clamp(16px, 3vw, 32px); }
+    .login-shell { min-height: calc(100vh - 64px); padding: 16px; }
+    .login-card {
+      width: min(100%, 440px);
+      padding: clamp(24px, 5vw, 38px);
+      border: 1px solid rgba(226,232,240,.9);
+      border-radius: 26px;
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 24px 70px rgba(30,64,175,.10);
+    }
+    .eyebrow { letter-spacing: .14em; font-size: 11px; }
+    .login-card h1 { letter-spacing: -.045em; line-height: 1.12; }
+    .subtle { color: var(--muted); }
+    .field label { font-size: 13px; }
+    .field input, .field select,
+    .password-required-form input,
+    .device-edit-form input, .device-edit-form select,
+    .house-selector select,
+    #passwordForm input {
+      min-height: 46px;
+      border: 1px solid #d8e1ef;
+      border-radius: 12px;
+      background: #fff;
+      transition: border-color .16s ease, box-shadow .16s ease;
+    }
+    .field input:focus, .field select:focus,
+    .password-required-form input:focus,
+    .device-edit-form input:focus, .device-edit-form select:focus,
+    .house-selector select:focus, #passwordForm input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px rgba(37,99,235,.10);
+    }
+    .primary-btn, .secondary-btn, .ghost-btn, .mini-btn, .view-tab {
+      min-height: 40px;
+      transition: transform .16s ease, background .16s ease, box-shadow .16s ease, border-color .16s ease;
+    }
+    .primary-btn { border-radius: 12px; box-shadow: 0 6px 14px rgba(37,99,235,.16); }
+    .primary-btn:hover { box-shadow: 0 9px 20px rgba(37,99,235,.22); }
+    button:disabled { transform: none; opacity: .58; cursor: not-allowed; }
+    .topbar {
+      max-width: 1280px;
+      padding: 18px 22px;
+      border: 1px solid rgba(226,232,240,.9);
+      background: rgba(255,255,255,.92);
+      box-shadow: 0 6px 20px rgba(15,23,42,.045);
+      backdrop-filter: blur(12px);
+    }
+    .brand { letter-spacing: -.025em; }
+    .dashboard { max-width: 1280px; }
+    .stat-grid { gap: 14px; margin: 22px 0; }
+    .stat-card {
+      min-width: 0;
+      padding: 21px;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 14px rgba(15,23,42,.035);
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+    .stat-label { font-size: 11px; letter-spacing: .09em; }
+    .stat-value { overflow-wrap: anywhere; letter-spacing: -.04em; }
+    .layout { grid-template-columns: minmax(0, 1.55fr) minmax(280px, .75fr); gap: 18px; }
+    .panel {
+      min-width: 0;
+      padding: clamp(16px, 2vw, 24px);
+      border: 1px solid var(--border);
+      box-shadow: 0 5px 18px rgba(15,23,42,.035);
+    }
+    .panel-header { align-items: center; }
+    .panel-header h2 { margin: 0; font-size: 1.1rem; letter-spacing: -.025em; }
+    .card-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); }
+    .house-card, .tenant-card, .device-card, .profile-card {
+      min-width: 0;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(15,23,42,.025);
+    }
+    .house-card, .tenant-card, .device-card { transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+    .house-card:hover, .tenant-card:hover, .device-card:hover {
+      border-color: #c4d5f5;
+      box-shadow: 0 8px 20px rgba(15,23,42,.055);
+      transform: translateY(-1px);
+    }
+    .device-card h3, .house-card h3, .tenant-card h3 { overflow-wrap: anywhere; }
+    .meta { overflow-wrap: anywhere; }
+    .tag, .device-status, .role-pill { white-space: nowrap; }
+    .inline-actions { align-items: center; }
+    .mini-btn { border: 1px solid transparent; }
+    .mini-btn:hover { filter: brightness(.97); }
+    .mini-btn.danger { border-color: #fecaca; }
+    .view-tabs { gap: 8px; }
+    .view-tab { border-color: #e2e8f0; background: rgba(255,255,255,.8); }
+    .view-tab:hover { border-color: #93b4f7; }
+    .view-tab.active { box-shadow: 0 4px 12px rgba(37,99,235,.16); }
+    .empty { border-color: #cbd5e1; background: #f8fafc; }
+    .alert { line-height: 1.45; overflow-wrap: anywhere; }
+    .password-form input { padding: 12px 14px; }
+    .tenant-registration-form { background: #f8fafc; }
+    .pairing-key-panel { overflow-wrap: anywhere; }
+    .pairing-key-panel code { max-width: 100%; }
+    dialog.password-required-dialog { background: #fff; }
+    @media (max-width: 900px) {
+      .screen { padding: 16px; }
+      .login-shell { min-height: calc(100vh - 32px); }
+      .layout { grid-template-columns: minmax(0, 1fr); }
+      .topbar { flex-direction: row; align-items: center; }
+      .user-meta { justify-content: flex-end; gap: 10px; }
+      .dashboard { padding: 0 0 24px; }
+    }
+    @media (max-width: 600px) {
+      .screen { padding: 10px; }
+      .login-shell { padding: 8px; }
+      .login-card { border-radius: 20px; }
+      .topbar { align-items: flex-start; flex-direction: column; padding: 16px; }
+      .user-meta { width: 100%; justify-content: space-between; }
+      .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .stat-card { padding: 15px; }
+      .stat-value { font-size: clamp(1.35rem, 7vw, 1.8rem); }
+      .panel { padding: 14px; }
+      .panel-header { flex-wrap: wrap; }
+      .card-grid { grid-template-columns: minmax(0, 1fr); }
+      .view-tabs { overflow-x: auto; flex-wrap: nowrap; padding: 2px 1px 6px; }
+      .view-tab { flex: 0 0 auto; }
+      .tenant-form-grid { grid-template-columns: minmax(0, 1fr); }
+      .tenant-registration-form .primary-btn { width: 100%; }
+      .inline-actions > button { max-width: 100%; }
+      .house-selector { align-items: stretch; flex-direction: column; }
+      .house-selector select { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+
+
+
+    /* ReMan Modern Experience — design system override */
+    :root {
+      --bg:#f5f7fb; --panel:#fff; --panel-soft:#f8fafc; --primary:#4f46e5;
+      --primary-dark:#3730a3; --success:#15803d; --warning:#b45309; --danger:#b91c1c;
+      --text:#172033; --muted:#697586; --border:#e6eaf0;
+      --shadow:0 12px 35px rgba(18, 32, 62, .07); --radius:20px;
+    }
+    html { min-height:100%; background:var(--bg); }
+    body { min-height:100vh; font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:linear-gradient(135deg,#f7f8fc 0%,#eef2ff 55%,#f8fafc 100%); color:var(--text); line-height:1.55; -webkit-font-smoothing:antialiased; }
+    button,input,select,textarea { font:inherit; }
+    button { touch-action:manipulation; }
+    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:3px solid #c7d2fe; outline-offset:2px; }
+    .screen { padding:clamp(14px,3vw,36px); }
+    #loginScreen.active { display:flex; align-items:center; justify-content:center; min-height:100vh; overflow:hidden; position:relative; }
+    #loginScreen.active::before { content:""; position:absolute; width:520px;height:520px;border-radius:50%;background:#c7d2fe;opacity:.35;filter:blur(2px);top:-250px;left:-160px;pointer-events:none; }
+    #loginScreen.active::after { content:""; position:absolute;width:420px;height:420px;border-radius:50%;background:#bfdbfe;opacity:.38;bottom:-240px;right:-100px;pointer-events:none; }
+    .login-shell { min-height:unset; width:100%; padding:18px; position:relative; z-index:1; }
+    .login-card { width:min(100%,460px); margin:auto; padding:clamp(28px,5vw,44px); border:1px solid rgba(255,255,255,.9); border-radius:28px; background:rgba(255,255,255,.91); box-shadow:0 30px 90px rgba(30,41,99,.14); backdrop-filter:blur(18px); }
+    .login-card::before { content:"R"; display:grid;place-items:center;width:54px;height:54px;margin-bottom:24px;border-radius:17px;background:linear-gradient(135deg,#6366f1,#3730a3);color:white;font-weight:900;font-size:27px;box-shadow:0 12px 24px #4f46e133; }
+    .eyebrow { color:#4f46e5; letter-spacing:.15em; font-size:11px; font-weight:800; }
+    .login-card h1 { font-size:clamp(2rem,5vw,2.65rem); letter-spacing:-.055em; line-height:1.1; margin-bottom:12px; }
+    .subtle { color:var(--muted); line-height:1.65; }
+    .field { margin-bottom:18px; }
+    .field label { font-size:13px; font-weight:700; margin-bottom:7px; }
+    .field input,.field select,.password-form input,.password-required-form input { width:100%; min-height:46px; padding:12px 14px; border:1px solid #dce2eb; border-radius:12px; background:#fff; color:var(--text); transition:border-color .18s,box-shadow .18s; }
+    .field input:focus,.field select:focus,.password-form input:focus,.password-required-form input:focus { outline:none; border-color:#818cf8; box-shadow:0 0 0 4px #6366f11a; }
+    .primary-btn,.secondary-btn,.ghost-btn { min-height:42px; border-radius:12px; padding:11px 16px; font-weight:750; transition:transform .18s,box-shadow .18s,background .18s; }
+    .primary-btn { background:linear-gradient(135deg,#6366f1,#4338ca); box-shadow:0 8px 18px #4f46e526; }
+    .primary-btn:hover { box-shadow:0 12px 24px #4f46e53a; }
+    .secondary-btn { background:#ecfdf5;color:#047857;border:1px solid #bbf7d0; }
+    .ghost-btn { background:#f1f5f9;color:#334155;border:1px solid #e2e8f0; }
+    button:disabled { opacity:.58; cursor:wait; transform:none; }
+    .alert { border-radius:12px; padding:12px 14px; font-size:13px; line-height:1.5; }
+    .alert.error { background:#fff1f2;color:#be123c;border-color:#fecdd3; }
+    .alert.success { background:#ecfdf5;color:#047857;border-color:#a7f3d0; }
+    #dashboardScreen { padding-top:18px; }
+    .topbar { max-width:1500px; margin:0 auto 24px; padding:17px 22px; border:1px solid rgba(226,232,240,.9); border-radius:18px; background:rgba(255,255,255,.88); box-shadow:0 5px 20px rgba(15,23,42,.04); position:sticky;top:10px;z-index:20;backdrop-filter:blur(16px); }
+    .brand { display:flex;align-items:center;gap:11px;font-size:1.03rem;letter-spacing:-.025em; }
+    .brand::before { content:"R"; display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#eef2ff;color:#4338ca;font-size:20px;font-weight:900; }
+    .user-meta { gap:12px; }
+    .role-pill { background:#eef2ff;color:#4338ca;border:1px solid #e0e7ff; padding:6px 11px; }
+    .dashboard { max-width:1500px; }
+    .stat-grid { gap:16px; margin:0 0 22px; }
+    .stat-card { padding:22px; border-radius:18px; border:1px solid #e8ecf3; box-shadow:0 5px 20px rgba(15,23,42,.035); position:relative; overflow:hidden; }
+    .stat-card::after { content:"";position:absolute;width:90px;height:90px;border-radius:50%;right:-40px;top:-45px;background:#eef2ff; }
+    .stat-label { position:relative;z-index:1;font-size:11px;letter-spacing:.09em;color:#7b8495; }
+    .stat-value { position:relative;z-index:1;font-size:clamp(1.8rem,2.5vw,2.35rem);letter-spacing:-.05em;color:#1e293b; }
+    .view-tabs { display:flex;gap:8px;overflow-x:auto;padding:6px;margin:0 0 20px;border:1px solid #e7ebf2;border-radius:16px;background:#fff;scrollbar-width:thin; }
+    .view-tab { border-radius:10px!important; padding:10px 15px!important; border:1px solid transparent!important; background:transparent!important;color:#64748b!important;font-weight:700!important;white-space:nowrap; }
+    .view-tab.active,.view-tab[aria-selected="true"] { background:#eef2ff!important;color:#4338ca!important;border-color:#e0e7ff!important; }
+    .layout { grid-template-columns:minmax(0,1.7fr) minmax(280px,.8fr); gap:20px; }
+    .panel { border:1px solid #e7ebf2;border-radius:20px;padding:clamp(17px,2vw,25px);box-shadow:0 5px 22px rgba(15,23,42,.035);min-width:0; }
+    .panel-header { margin-bottom:20px; }
+    .panel-header h2 { font-size:1.08rem;letter-spacing:-.025em;margin:0; }
+    .list-card,.house-card,.device-card,.tenant-card,.profile-card { border:1px solid #e8ecf3!important;border-radius:16px!important;box-shadow:none!important;background:#fff!important; }
+    .list-grid { gap:13px; }
+    .profile-card { padding:16px!important;background:#f8fafc!important; }
+    .password-form { gap:10px; }
+    .password-form input { min-width:0; }
+    .password-form .primary-btn { margin-top:3px; }
+    .password-required-dialog { border:1px solid #e2e8f0;border-radius:22px;box-shadow:0 30px 90px #0f172a33;padding:clamp(22px,4vw,34px);width:min(94vw,480px); }
+    .password-required-dialog::backdrop { background:rgba(15,23,42,.55);backdrop-filter:blur(4px); }
+    .password-required-dialog h2 { letter-spacing:-.035em; }
+    .password-required-form { gap:12px; }
+    .password-required-form .field { margin:0; }
+    .password-required-form .alert { margin-top:0; }
+    .password-field-wrap { display:flex;position:relative;align-items:stretch;width:100%; }
+    .password-field-wrap > input { width:100%;padding-right:52px!important; }
+    .password-toggle { position:absolute;right:5px;top:50%;transform:translateY(-50%);width:38px;height:36px;display:grid;place-items:center;border:0;border-radius:9px;background:transparent;color:#64748b;cursor:pointer;padding:0; }
+    .password-toggle:hover { background:#f1f5f9;color:#4338ca;transform:translateY(-50%); }
+    .password-toggle svg { width:19px;height:19px; }
+    .global-loading { position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;background:rgba(248,250,252,.64);backdrop-filter:blur(3px);padding:20px; }
+    .global-loading.visible { display:flex; }
+    .loading-card { display:flex;align-items:center;gap:14px;min-width:min(320px,100%);padding:18px 20px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 20px 60px #0f172a1a; }
+    .loading-spinner { width:25px;height:25px;border:3px solid #e0e7ff;border-top-color:#4f46e5;border-radius:50%;animation:reman-spin .8s linear infinite;flex:0 0 auto; }
+    .loading-title { font-size:14px;font-weight:800;color:#172033; }
+    .loading-detail { font-size:12px;color:#697586;margin-top:2px; }
+    @keyframes reman-spin { to { transform:rotate(360deg); } }
+    .data-loading { display:flex;align-items:center;gap:10px;padding:18px;border:1px dashed #cbd5e1;border-radius:14px;color:#64748b;background:#f8fafc;font-size:13px; }
+    .data-loading .loading-spinner { width:18px;height:18px;border-width:2px; }
+    .toast-region { position:fixed;right:20px;bottom:20px;z-index:10001;display:grid;gap:10px;width:min(360px,calc(100vw - 40px));pointer-events:none; }
+    .reman-toast { padding:13px 15px;border:1px solid #bbf7d0;border-radius:13px;background:#f0fdf4;color:#166534;box-shadow:0 12px 35px #0f172a14;font-size:13px;font-weight:700;animation:toast-in .2s ease-out; }
+    .reman-toast.error { border-color:#fecdd3;background:#fff1f2;color:#be123c; }
+    @keyframes toast-in { from { opacity:0;transform:translateY(8px); } to { opacity:1;transform:translateY(0); } }
+    @media(max-width:900px) { .layout { grid-template-columns:minmax(0,1fr); } .topbar { position:relative;top:auto; } .dashboard { padding-bottom:20px; } }
+    @media(max-width:560px) { .screen { padding:12px; } .login-shell { padding:8px; } .login-card { padding:26px 21px; } .topbar { padding:14px;align-items:flex-start; } .user-meta { gap:8px; } .user-meta strong { font-size:13px; } .view-tabs { margin-left:-2px;margin-right:-2px; } .panel { padding:16px; } .stat-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; } .stat-card { padding:16px; } .stat-value { font-size:1.65rem; } }
+    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important;transition-duration:.01ms!important; } }
+
+
+    /* Interaction polish: no full-screen loading veil over the login form. */
+    .button-spinner { width:15px;height:15px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;display:inline-block;animation:reman-spin .7s linear infinite;vertical-align:middle;margin-right:9px; }
+    #loginBtn { display:flex;align-items:center;justify-content:center;min-height:48px;transition:opacity .18s ease,transform .18s ease; }
+    #loginBtn:disabled { opacity:.82;cursor:wait; }
+    .global-loading { background:rgba(241,245,249,.78);backdrop-filter:blur(5px); }
+    .loading-card { border-radius:18px;box-shadow:0 18px 55px rgba(15,23,42,.12); }
+    .stat-card-link { display:flex;text-align:left;width:100%;font-family:inherit;cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+    .stat-card-link:hover { transform:translateY(-3px);border-color:#c7d2fe!important;box-shadow:0 14px 28px rgba(79,70,229,.09)!important; }
+    .stat-card-link:focus-visible,.house-card-clickable:focus-visible { outline:3px solid rgba(79,70,229,.3);outline-offset:3px; }
+    .stat-hint { display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:#6366f1;font-size:12px;font-weight:750;position:relative;z-index:1; }
+    .house-card-clickable { cursor:pointer;display:flex;flex-direction:column;min-height:205px;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+    .house-card-clickable:hover { transform:translateY(-4px);border-color:#c7d2fe!important;box-shadow:0 16px 32px rgba(15,23,42,.08)!important; }
+    .house-card-top { display:flex;justify-content:space-between;align-items:center;margin-bottom:12px; }
+    .card-arrow { width:30px;height:30px;display:grid;place-items:center;background:#f1f5f9;border-radius:10px;color:#6366f1;font-weight:800; }
+    .house-card-footer { margin-top:auto;padding-top:18px;display:flex;justify-content:space-between;align-items:center;color:#6366f1;font-size:12px;font-weight:750; }
+    .device-card-modern { padding:0!important;overflow:hidden; }
+    .device-card-head { display:flex;align-items:center;gap:13px;padding:20px 20px 17px; }
+    .device-icon-tile { width:48px;height:48px;flex:0 0 48px;border-radius:15px;background:linear-gradient(145deg,#eef2ff,#e0e7ff);display:grid;place-items:center;color:#4f46e5;font-size:27px;font-weight:800; }
+    .device-card-title { flex:1;min-width:0; }
+    .device-kicker { display:block;color:#818ba0;font-size:9px;font-weight:850;letter-spacing:.12em;margin-bottom:4px; }
+    .device-card-title h3 { margin:0 0 4px!important;font-size:16px!important;letter-spacing:-.025em; }
+    .device-card-title .meta { font-size:11px;line-height:1.5; }
+    .meta-dot { color:#a5b4fc;padding:0 3px; }
+    .device-card-divider { height:1px;background:#edf0f5;margin:0 20px; }
+    .device-section-label { padding:15px 20px 0;color:#8a94a6;font-size:10px;font-weight:850;letter-spacing:.1em; }
+    .device-card-modern > .inline-actions { padding:12px 20px 18px;gap:8px; }
+    .device-card-modern > .inline-actions .mini-btn { border-radius:10px; }
+    .device-card-modern .device-edit-form { margin:0 16px 16px!important;padding:14px!important;border-radius:13px!important;background:#f8fafc!important;border:1px solid #edf0f5!important; }
+    .device-status { display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border-radius:999px;padding:6px 9px;font-size:10px;font-weight:800; }
+    .status-dot { width:6px;height:6px;border-radius:50%;background:currentColor; }
+    .device-status.online { background:#ecfdf3;color:#15803d; }
+    .device-status.offline { background:#f1f5f9;color:#64748b; }
+    @media(max-width:560px) { .device-card-head { padding:16px 14px 14px;gap:10px;flex-wrap:wrap; } .device-icon-tile { width:42px;height:42px;flex-basis:42px; } .device-card-title { min-width:calc(100% - 64px); } .device-status { margin-left:52px; } .device-card-divider { margin:0 14px; } .device-section-label { padding:13px 14px 0; } .device-card-modern > .inline-actions { padding:10px 14px 14px; } }
+
+
+    .auth-links{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+    .auth-link{border:0;background:transparent;color:#4f46e5;font-weight:750;font-size:13px;cursor:pointer;padding:7px 0;text-decoration:none}
+    .auth-link:hover{text-decoration:underline}
+    .auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:#94a3b8;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .auth-divider:before,.auth-divider:after{content:"";height:1px;background:#e2e8f0;flex:1}
+    .auth-secondary-btn{width:100%;background:#fff;color:#4338ca;border:1px solid #c7d2fe}
+    .auth-dialog{width:min(94vw,470px);padding:clamp(22px,4vw,34px);border:1px solid #e2e8f0;border-radius:22px;color:var(--text);box-shadow:0 30px 90px #0f172a33}
+    .auth-dialog::backdrop{background:rgba(15,23,42,.58);backdrop-filter:blur(4px)}
+    .auth-dialog h2{letter-spacing:-.035em;margin-bottom:8px}
+    .auth-dialog .subtle{margin-bottom:20px;font-size:14px}
+    .auth-dialog .field{margin-bottom:14px}
+    .auth-dialog .primary-btn{width:100%}
+    .auth-dialog .alert{margin-top:12px}
+    .auth-dialog .auth-link{margin-top:8px}
+
   </style>
 </head>
 <body>
+  <div id="globalLoading" class="global-loading" role="status" aria-live="polite" aria-hidden="true">
+    <div class="loading-card"><span class="loading-spinner" aria-hidden="true"></span><div><div id="globalLoadingTitle" class="loading-title">Loading ReMan</div><div id="globalLoadingDetail" class="loading-detail">Please wait while we retrieve your data.</div></div></div>
+  </div>
+  <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
   <div id="loginScreen" class="screen active">
     <div class="login-shell">
       <div class="login-card">
-        <p class="eyebrow">Rental Management</p>
-        <h1>Smart Home Access</h1>
-        <p class="subtle">Secure portal for owners, admins, tenants and users.</p>
+        <p class="eyebrow">Rental Manangement Solution</p>
+        <h1>Welcome Home!</h1>
+        <!--p class="subtle">Manage y</p-->
 
         <div class="field">
           <label for="email">Email</label>
-          <input id="email" type="email" value="admin@example.com" autocomplete="email" />
+          <input id="email" type="email" autocomplete="email" aria-label="Email address" required />
         </div>
 
         <div class="field">
           <label for="password">Password</label>
-          <input id="password" type="password" value="AdminPass123!" autocomplete="current-password" />
+          <input id="password" type="password" autocomplete="current-password" aria-label="Password" required />
         </div>
 
         <button id="loginBtn" class="primary-btn" type="button">Sign In</button>
-        <div id="loginAlert" class="alert error"></div>
+        <div class="auth-links">
+          <button id="forgotPasswordLink" class="auth-link" type="button" hidden>Forgot password?</button>
+          <span id="loginHelpText" class="meta" style="margin:0;font-size:12px;">Secure access to your property</span>
+        </div>
+        <div id="loginAlert" class="alert error" role="status" aria-live="polite"></div>
+        <div class="auth-divider">New to ReMan?</div>
+        <button id="openSignupBtn" class="primary-btn auth-secondary-btn" type="button">Create an account</button>
       </div>
     </div>
   </div>
@@ -565,20 +881,64 @@
     </form>
   </dialog>
 
+  <dialog id="signupDialog" class="auth-dialog" aria-labelledby="signupTitle">
+    <h2 id="signupTitle">Create your ReMan account</h2>
+    <p class="subtle">Register a standard user account. House and device access can be granted by an owner or administrator.</p>
+    <form id="signupForm">
+      <div class="field"><label for="signupName">Full name</label><input id="signupName" name="name" autocomplete="name" required /></div>
+      <div class="field"><label for="signupEmail">Email address</label><input id="signupEmail" name="email" type="email" autocomplete="email" required /></div>
+      <div class="field"><label for="signupPassword">Password</label><input id="signupPassword" name="password" type="password" autocomplete="new-password" minlength="8" required /></div>
+      <div class="field"><label for="signupConfirmPassword">Confirm password</label><input id="signupConfirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required /></div>
+      <button id="signupSubmitBtn" class="primary-btn" type="submit">Create account</button>
+      <div id="signupAlert" class="alert" role="status" aria-live="polite"></div>
+    </form>
+    <button class="auth-link" type="button" data-close-dialog="signupDialog">Back to sign in</button>
+  </dialog>
+
+  <dialog id="forgotPasswordDialog" class="auth-dialog" aria-labelledby="forgotPasswordTitle">
+    <h2 id="forgotPasswordTitle">Reset your password</h2>
+    <p class="subtle">We’ll send a verification code to the email address on your account if it is eligible for password recovery.</p>
+    <form id="forgotPasswordForm">
+      <div class="field"><label for="resetEmail">Email address</label><input id="resetEmail" type="email" autocomplete="email" required /></div>
+      <button id="requestResetBtn" class="primary-btn" type="submit">Send verification code</button>
+      <div id="forgotPasswordAlert" class="alert" role="status" aria-live="polite"></div>
+    </form>
+    <form id="completeResetForm" style="display:none;margin-top:18px">
+      <div class="field"><label for="resetCode">Verification code</label><input id="resetCode" inputmode="numeric" autocomplete="one-time-code" required /></div>
+      <div class="field"><label for="resetNewPassword">New password</label><input id="resetNewPassword" type="password" autocomplete="new-password" minlength="8" required /></div>
+      <div class="field"><label for="resetConfirmPassword">Confirm new password</label><input id="resetConfirmPassword" type="password" autocomplete="new-password" minlength="8" required /></div>
+      <button id="completeResetBtn" class="primary-btn" type="submit">Update password</button>
+      <div id="completeResetAlert" class="alert" role="status" aria-live="polite"></div>
+    </form>
+    <button class="auth-link" type="button" data-close-dialog="forgotPasswordDialog">Back to sign in</button>
+  </dialog>
+
   <script>
     function resolveApiBase() {
       const host = window.location.hostname;
       const origin = window.location.origin;
+      const cloudApi = 'https://api.ehexibit.com';
+      const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
 
-      if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || origin.includes('8787')) {
-        return origin || 'http://127.0.0.1:8787';
+      // Opening this HTML directly (file://) gives the page an opaque "null" origin.
+      // Use the deployed API instead of constructing a file:///api/... request.
+      if (window.location.protocol === 'file:') {
+        return cloudApi;
       }
 
-      if (host === 'rental-management.ehexibit.com') {
-        return 'https://api.ehexibit.com';
+      // Use a locally running Wrangler API only when the page is served from its port.
+      // A static server such as `python -m http.server 8080` is not the API server.
+      if (isLocalHost && window.location.port === '8787') {
+        return origin;
       }
 
-      return origin || 'http://127.0.0.1:8787';
+      // Local static preview and the deployed ReMan portal use the Cloudflare API.
+      if (isLocalHost || host === 'rental-management.ehexibit.com') {
+        return cloudApi;
+      }
+
+      // For any other HTTP(S) deployment, assume the API is served on the same origin.
+      return origin;
     }
 
     const API_BASE = resolveApiBase();
@@ -610,6 +970,7 @@
     const userRole = document.getElementById('userRole');
     const mainPanelTitle = document.getElementById('mainPanelTitle');
     const viewTabs = document.getElementById('viewTabs');
+    let passwordResetEmail = '';
 
     function showAlert(element, message, type) {
       element.textContent = message;
@@ -631,15 +992,6 @@
       })[character]);
     }
 
-    function escapeHtml(value) {
-      return String(value).replace(/[&<>"']/g, character => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-      })[character]);
-    }
 
     function formatRole(role) {
       return role ? role.toUpperCase() : 'USER';
@@ -684,12 +1036,29 @@
       });
     }
 
+    function navigateToView(view) {
+      if (!getRoleViews().includes(view)) return;
+      state.activeView = view;
+      renderViewTabs();
+      renderMainPanel();
+      document.querySelector('.main-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     function setActiveScreen(screen) {
       loginScreen.classList.toggle('active', screen === 'login');
       dashboardScreen.classList.toggle('active', screen === 'dashboard');
     }
 
+    // Requests never block the whole dashboard. Individual buttons/forms show their own busy state.
+    function setGlobalLoading() {
+      const overlay = document.getElementById('globalLoading');
+      if (overlay) {
+        overlay.classList.remove('visible');
+        overlay.setAttribute('aria-hidden', 'true');
+      }
+    }
     async function requestJson(url, options = {}) {
+      setGlobalLoading(false);
       const response = await fetch(url, {
         ...options,
         headers: {
@@ -697,15 +1066,39 @@
           ...(options.headers || {})
         }
       });
-
       const text = await response.text();
-      const data = text ? JSON.parse(text) : {};
-
-      if (!response.ok) {
-        throw new Error(data.error || data.message || 'Request failed');
+      let data = {};
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(response.ok
+            ? 'The server returned an invalid response.'
+            : `Request failed (${response.status}). Check the API server and try again.`);
+        }
       }
-
+      if (!response.ok) {
+        const error = new Error(data.error || data.message || 'Request failed');
+        error.code = data.code || data.errorCode || '';
+        error.emailActive = data.emailActive === true || data.email_active === true;
+        throw error;
+      }
       return data;
+    }
+
+    function setButtonBusy(button, busy, label) {
+      if (!button) return;
+      if (busy) {
+        if (!button.dataset.idleHtml) button.dataset.idleHtml = button.innerHTML;
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        button.innerHTML = `<span class="button-spinner" aria-hidden="true"></span><span>${label || 'Working…'}</span>`;
+      } else {
+        if (button.dataset.idleHtml) button.innerHTML = button.dataset.idleHtml;
+        delete button.dataset.idleHtml;
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
     }
 
         function getAuthHeaders() {
@@ -731,12 +1124,17 @@
         ];
       }
 
-      statsGrid.innerHTML = cards.map(card => `
-        <div class="stat-card">
-          <div class="stat-label">${card.label}</div>
-          <div class="stat-value">${card.value}</div>
-        </div>
-      `).join('');
+      statsGrid.innerHTML = cards.map(card => {
+        const target = /house/i.test(card.label) ? 'houses' : /tenant/i.test(card.label) ? 'tenants' : /device/i.test(card.label) ? 'devices' : 'overview';
+        const safeTarget = getRoleViews().includes(target) ? target : 'overview';
+        return `
+          <button type="button" class="stat-card stat-card-link" data-navigate-view="${safeTarget}" aria-label="Open ${escapeHtml(card.label)} section">
+            <span class="stat-label">${escapeHtml(card.label)}</span>
+            <span class="stat-value">${escapeHtml(card.value)}</span>
+            
+          </button>`;
+      }).join('');
+      statsGrid.querySelectorAll('[data-navigate-view]').forEach(card => card.addEventListener('click', () => navigateToView(card.dataset.navigateView)));
     }
 
     function renderProfile() {
@@ -766,25 +1164,27 @@
       }
 
       const cards = state.houses.map(house => `
-        <div class="house-card">
-          <div class="tag">House</div>
-          <h3>${house.name || 'Unnamed House'}</h3>
-          <div class="meta">${house.location || 'No location'}<br />Owner ID: ${house.owner_id || 'N/A'}</div>
-          <div class="inline-actions">
-            <button class="mini-btn" data-house-id="${house.id}" data-action="select-house">View Devices</button>
-          </div>
-        </div>
+        <article class="house-card house-card-clickable" role="button" tabindex="0" aria-label="Open devices for ${escapeHtml(house.name || `House ${house.id}`)}" data-open-house="${house.id}">
+          <div class="house-card-top"><span class="tag">House</span><span class="card-arrow" aria-hidden="true">↗</span></div>
+          <h3>${escapeHtml(house.name || 'Unnamed House')}</h3>
+          <div class="meta">${escapeHtml(house.location || 'No location')}<br />Owner ID: ${escapeHtml(house.owner_id || 'N/A')}</div>
+          <div class="house-card-footer"><span>Manage connected devices</span><span aria-hidden="true">→</span></div>
+        </article>
       `).join('');
 
       mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
 
-      document.querySelectorAll('[data-action="select-house"]').forEach(button => {
-        button.addEventListener('click', () => {
-          const houseId = Number(button.dataset.houseId);
-          state.selectedHouseId = houseId;
-          state.activeView = 'devices';
-          renderViewTabs();
-          renderMainPanel();
+      const openHouse = card => {
+        state.selectedHouseId = Number(card.dataset.openHouse);
+        navigateToView('devices');
+      };
+      mainPanelContent.querySelectorAll('[data-open-house]').forEach(card => {
+        card.addEventListener('click', event => {
+          if (event.target.closest('button, a, input, select, form')) return;
+          openHouse(card);
+        });
+        card.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openHouse(card); }
         });
       });
     }
@@ -939,12 +1339,14 @@
             </div>
           `).join('');
           return `
-        <div class="device-card">
-          <h3>${escapeHtml(device.device_name || `Device ${device.id}`)}</h3>
-          <div class="meta">Type: ${escapeHtml(device.device_type || 'Unknown')}<br />House: ${escapeHtml(selectedHouse.name || `House ${selectedHouse.id}`)}</div>
-          <span class="device-status ${['online', 'active', 'on'].includes(String(device.status || '').toLowerCase()) ? 'online' : 'offline'}">
-            ${escapeHtml(device.status || 'offline')}
-          </span>
+        <article class="device-card device-card-modern">
+          <div class="device-card-head">
+            <div class="device-icon-tile" aria-hidden="true">⌁</div>
+            <div class="device-card-title"><span class="device-kicker">CONNECTED DEVICE</span><h3>${escapeHtml(device.device_name || `Device ${device.id}`)}</h3><div class="meta">${escapeHtml(device.device_type || 'Unknown')} <span class="meta-dot">•</span> ${escapeHtml(selectedHouse.name || `House ${selectedHouse.id}`)}</div></div>
+            <span class="device-status ${['online', 'active', 'on'].includes(String(device.status || '').toLowerCase()) ? 'online' : 'offline'}"><span class="status-dot"></span>${escapeHtml(device.status || 'offline')}</span>
+          </div>
+          <div class="device-card-divider"></div>
+          <div class="device-section-label">QUICK CONTROLS</div>
           <div class="inline-actions">
             <button class="mini-btn" type="button" data-device-command="door.unlock" data-device-id="${device.id}">Unlock door (5 sec)</button>
             <button class="mini-btn" type="button" data-device-command="door.lock" data-device-id="${device.id}">Lock door</button>
@@ -994,7 +1396,7 @@
               <button class="mini-btn" type="button" data-pair-device="${device.id}">${device.pairing_configured ? 'Regenerate pairing key' : 'Pair ESP32'}</button>
             </div>
           ` : ''}
-        </div>
+        </article>
           `;
         })()}
       `).join('');
@@ -1310,7 +1712,7 @@
         }
       });
 
-      document.querySelectorAll('.device-edit-form[data-device-id]').forEach(form => {
+      document.querySelectorAll('form.device-edit-form[data-device-id]').forEach(form => {
         form.addEventListener('submit', async event => {
           event.preventDefault();
           const formData = new FormData(event.currentTarget);
@@ -1345,6 +1747,7 @@
       document.querySelectorAll('[data-pair-device]').forEach(button => {
         button.addEventListener('click', async () => {
           if (!window.confirm('Generate a new pairing key? The current key will stop working.')) return;
+          setButtonBusy(button, true, 'Pairing…');
           try {
             const result = await requestJson(`${API_BASE}/api/devices/${button.dataset.pairDevice}/pairing-key`, {
               method: 'POST',
@@ -1354,13 +1757,16 @@
             showPairingKey(button.dataset.pairDevice, result.pairing_key);
           } catch (error) {
             showAlert(document.getElementById('deviceNotice') || deviceNotice, error.message || 'Unable to pair device.', 'error');
+          } finally {
+            setButtonBusy(button, false);
           }
         });
       });
 
       document.querySelectorAll('[data-device-command]').forEach(button => {
         button.addEventListener('click', async () => {
-          button.disabled = true;
+          const idleLabel = button.textContent.trim();
+          setButtonBusy(button, true, 'Sending…');
           try {
             const ticketData = await requestJson(`${API_BASE}/ws/ticket`, {
               method: 'POST',
@@ -1400,7 +1806,7 @@
                     socket.close();
                     reject(new Error('The device did not confirm the command.'));
                   }, 10000);
-                } else if (message.type === 'device_response' && Number(message.deviceId) === Number(button.dataset.deviceId)) {
+                } else if (message.type === 'device_response' && Number(message.deviceId) === Number(button.dataset.deviceId) && message.command === button.dataset.deviceCommand) {
                   window.clearTimeout(timeout);
                   socket.close();
                   if (message.success === false) reject(new Error(message.message || 'The device rejected the command.'));
@@ -1420,7 +1826,7 @@
           } catch (error) {
             showAlert(deviceNotice, error.message || 'Unable to control device.', 'error');
           } finally {
-            button.disabled = false;
+            setButtonBusy(button, false);
           }
         });
       });
@@ -1453,10 +1859,10 @@
       }
 
       const cards = state.houses.map(house => `
-        <div class="house-card">
-          <div class="tag">House</div>
+        <article class="house-card house-card-clickable" role="button" tabindex="0" aria-label="Open devices for ${escapeHtml(house.name || `House ${house.id}`)}" data-open-house="${house.id}">
+          <div class="house-card-top"><span class="tag">House</span><span class="card-arrow" aria-hidden="true">↗</span></div>
           <h3>${house.name || 'Assigned House'}</h3>
-          <div class="meta">${house.location || 'No location'}<br />Owner: ${house.owner_id || 'N/A'}</div>
+          <div class="meta">${escapeHtml(house.location || 'No location')}<br />Owner: ${escapeHtml(house.owner_id || 'N/A')}</div>
           <div class="inline-actions">
             <button class="mini-btn" data-house-id="${house.id}" data-action="select-house">View Devices</button>
           </div>
@@ -1464,13 +1870,17 @@
       `).join('');
 
       mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
-      document.querySelectorAll('[data-action="select-house"]').forEach(button => {
-        button.addEventListener('click', () => {
-          const houseId = Number(button.dataset.houseId);
-          state.selectedHouseId = houseId;
-          state.activeView = 'devices';
-          renderViewTabs();
-          renderMainPanel();
+      const openHouse = card => {
+        state.selectedHouseId = Number(card.dataset.openHouse);
+        navigateToView('devices');
+      };
+      mainPanelContent.querySelectorAll('[data-open-house]').forEach(card => {
+        card.addEventListener('click', event => {
+          if (event.target.closest('button, a, input, select, form')) return;
+          openHouse(card);
+        });
+        card.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openHouse(card); }
         });
       });
     }
@@ -1513,14 +1923,20 @@
       state.provisionableUsers = [];
       try {
         const housesResponse = await fetch(`${API_BASE}/api/houses`, { headers });
-        const housesData = await housesResponse.json();
+        const housesData = await housesResponse.json().catch(() => ({}));
+        if (!housesResponse.ok) {
+          throw new Error(housesData.error || housesData.message || `Unable to load houses (${housesResponse.status})`);
+        }
         state.houses = Array.isArray(housesData.houses) ? housesData.houses : (Array.isArray(housesData) ? housesData : []);
 
         if (state.role === 'admin' || state.role === 'owner') {
           const provisionableUsers = await requestJson(`${API_BASE}/api/provisioning/users`, { headers });
           state.provisionableUsers = Array.isArray(provisionableUsers.users) ? provisionableUsers.users : [];
           const tenantsResponse = await fetch(`${API_BASE}/api/tenants`, { headers });
-          const tenantsData = await tenantsResponse.json();
+          const tenantsData = await tenantsResponse.json().catch(() => ({}));
+          if (!tenantsResponse.ok) {
+            throw new Error(tenantsData.error || tenantsData.message || `Unable to load tenants (${tenantsResponse.status})`);
+          }
           state.tenants = Array.isArray(tenantsData.tenants) ? tenantsData.tenants : [];
         }
 
@@ -1569,7 +1985,11 @@
       }
 
       loginBtn.disabled = true;
+      loginBtn.dataset.originalLabel = loginBtn.dataset.originalLabel || loginBtn.textContent.trim() || 'Sign In';
+      loginBtn.innerHTML = '<span class="button-spinner" aria-hidden="true"></span><span>Signing in…</span>';
+      loginBtn.setAttribute('aria-busy', 'true');
       clearAlert(loginAlert);
+      document.getElementById('forgotPasswordLink').hidden = true;
 
       try {
         const loginResponse = await requestJson(`${API_BASE}/api/login`, {
@@ -1604,8 +2024,16 @@
         await loadDashboardData();
       } catch (error) {
         showAlert(loginAlert, error.message || 'Login failed.', 'error');
+        // Only expose recovery after the API explicitly confirms a wrong password
+        // for an active account. Generic/unknown login failures keep it hidden.
+        const recoveryAllowed = error.code === 'INVALID_PASSWORD' && error.emailActive === true;
+        const recoveryLink = document.getElementById('forgotPasswordLink');
+        recoveryLink.hidden = !recoveryAllowed;
+        if (recoveryAllowed) document.getElementById('resetEmail').value = email;
       } finally {
         loginBtn.disabled = false;
+        loginBtn.textContent = loginBtn.dataset.originalLabel || 'Sign In';
+        loginBtn.removeAttribute('aria-busy');
       }
     }
 
@@ -1621,8 +2049,6 @@
       state.provisionableUsers = [];
       state.selectedHouseId = null;
       state.activeView = 'overview';
-      document.getElementById('email').value = 'admin@example.com';
-      document.getElementById('password').value = 'AdminPass123!';
       clearAlert(loginAlert);
       clearAlert(passwordAlert);
       setActiveScreen('login');
@@ -1690,6 +2116,109 @@
       }
     }
 
+
+    function openAuthDialog(id) {
+      const dialog = document.getElementById(id);
+      if (dialog && !dialog.open) dialog.showModal();
+    }
+
+    document.getElementById('openSignupBtn').addEventListener('click', () => {
+      clearAlert(document.getElementById('signupAlert'));
+      openAuthDialog('signupDialog');
+    });
+    document.getElementById('forgotPasswordLink').addEventListener('click', () => {
+      clearAlert(document.getElementById('forgotPasswordAlert'));
+      clearAlert(document.getElementById('completeResetAlert'));
+      document.getElementById('completeResetForm').style.display = 'none';
+      document.getElementById('resetEmail').value = document.getElementById('email').value.trim();
+      openAuthDialog('forgotPasswordDialog');
+    });
+    document.querySelectorAll('[data-close-dialog]').forEach(button => {
+      button.addEventListener('click', () => document.getElementById(button.dataset.closeDialog)?.close());
+    });
+
+    document.getElementById('signupForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const button = document.getElementById('signupSubmitBtn');
+      const name = document.getElementById('signupName').value.trim();
+      const email = document.getElementById('signupEmail').value.trim();
+      const password = document.getElementById('signupPassword').value;
+      const confirmPassword = document.getElementById('signupConfirmPassword').value;
+      const alert = document.getElementById('signupAlert');
+      clearAlert(alert);
+      if (password !== confirmPassword) return showAlert(alert, 'Passwords do not match.', 'error');
+      if (password.length < 8) return showAlert(alert, 'Use at least 8 characters for your password.', 'error');
+      setButtonBusy(button, true, 'Creating account…');
+      try {
+        const result = await requestJson(`${API_BASE}/api/signup`, {
+          method: 'POST',
+          body: JSON.stringify({ name, email, password, role: 'user' })
+        });
+        showAlert(alert, result.message || 'Account created. You can now sign in.', 'success');
+        form.reset();
+        showToast(result.message || 'Account created successfully.');
+      } catch (error) {
+        showAlert(alert, error.message || 'Could not create account.', 'error');
+      } finally {
+        setButtonBusy(button, false);
+      }
+    });
+
+    document.getElementById('forgotPasswordForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = document.getElementById('requestResetBtn');
+      const email = document.getElementById('resetEmail').value.trim();
+      const alert = document.getElementById('forgotPasswordAlert');
+      clearAlert(alert);
+      setButtonBusy(button, true, 'Sending code…');
+      try {
+        // Requires a server endpoint that creates a short-lived, single-use OTP
+        // and sends it to the account's verified/active email address.
+        const result = await requestJson(`${API_BASE}/api/password-reset/request`, {
+          method: 'POST', body: JSON.stringify({ email })
+        });
+        passwordResetEmail = email;
+        document.getElementById('completeResetForm').style.display = 'block';
+        showAlert(alert, result.message || 'If the account is eligible, a verification code has been sent.', 'success');
+      } catch (error) {
+        showAlert(alert, error.message || 'Unable to request password reset. Please try again later.', 'error');
+      } finally {
+        setButtonBusy(button, false);
+      }
+    });
+
+    document.getElementById('completeResetForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = document.getElementById('completeResetBtn');
+      const code = document.getElementById('resetCode').value.trim();
+      const password = document.getElementById('resetNewPassword').value;
+      const confirmPassword = document.getElementById('resetConfirmPassword').value;
+      const alert = document.getElementById('completeResetAlert');
+      clearAlert(alert);
+      if (password !== confirmPassword) return showAlert(alert, 'Passwords do not match.', 'error');
+      if (password.length < 8) return showAlert(alert, 'Use at least 8 characters for your password.', 'error');
+      setButtonBusy(button, true, 'Updating password…');
+      try {
+        const result = await requestJson(`${API_BASE}/api/password-reset/confirm`, {
+          method: 'POST', body: JSON.stringify({ email: passwordResetEmail || document.getElementById('resetEmail').value.trim(), code, newPassword: password })
+        });
+        showAlert(alert, result.message || 'Password reset successfully. You can sign in with your new password.', 'success');
+        document.getElementById('password').value = '';
+        document.getElementById('email').value = passwordResetEmail;
+        document.getElementById('forgotPasswordDialog').close();
+        document.getElementById('forgotPasswordForm').reset();
+        document.getElementById('completeResetForm').reset();
+        document.getElementById('completeResetForm').style.display = 'none';
+        document.getElementById('forgotPasswordLink').hidden = true;
+        showAlert(loginAlert, result.message || 'Password reset successfully. Please sign in.', 'success');
+      } catch (error) {
+        showAlert(alert, error.message || 'Password reset failed. Check the code and try again.', 'error');
+      } finally {
+        setButtonBusy(button, false);
+      }
+    });
+
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
     document.getElementById('refreshBtn').addEventListener('click', async () => {
@@ -1707,5 +2236,110 @@
       }
     });
   </script>
+
+  <script>
+    (() => {
+      const eyeIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+      const eyeOffIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 4-.8"/></svg>';
+      function enhancePasswordInputs() {
+        document.querySelectorAll('input[type="password"]:not([data-visibility-ready])').forEach(input => {
+          input.dataset.visibilityReady = 'true';
+          const wrap = document.createElement('div');
+          wrap.className = 'password-field-wrap';
+          input.parentNode.insertBefore(wrap, input);
+          wrap.appendChild(input);
+          const toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'password-toggle';
+          toggle.setAttribute('aria-label', 'Show password');
+          toggle.setAttribute('aria-pressed', 'false');
+          toggle.title = 'Show password';
+          toggle.innerHTML = eyeIcon;
+          toggle.addEventListener('click', () => {
+            const reveal = input.type === 'password';
+            input.type = reveal ? 'text' : 'password';
+            toggle.innerHTML = reveal ? eyeOffIcon : eyeIcon;
+            toggle.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
+            toggle.setAttribute('aria-pressed', String(reveal));
+            toggle.title = reveal ? 'Hide password' : 'Show password';
+            input.focus({ preventScroll: true });
+          });
+          wrap.appendChild(toggle);
+        });
+      }
+      function showToast(message, type = 'success') {
+        const region = document.getElementById('toastRegion');
+        if (!region || !message) return;
+        const toast = document.createElement('div');
+        toast.className = `reman-toast${type === 'error' ? ' error' : ''}`;
+        toast.textContent = message;
+        region.appendChild(toast);
+        window.setTimeout(() => toast.remove(), 4200);
+      }
+      // Provide visible loading feedback even while the page's data panel is being rendered.
+      function showInlineLoading() {
+        const panel = document.getElementById('mainPanelContent');
+        if (!panel || panel.dataset.loadingHint === 'shown') return;
+        panel.dataset.loadingHint = 'shown';
+      }
+      enhancePasswordInputs();
+      const observer = new MutationObserver(() => enhancePasswordInputs());
+      observer.observe(document.body, { childList: true, subtree: true });
+      document.addEventListener('click', event => {
+        const button = event.target.closest('#refreshBtn');
+        if (!button) return;
+        const original = button.dataset.originalLabel || button.textContent.trim() || 'Refresh';
+        button.dataset.originalLabel = original;
+        button.disabled = true;
+        button.textContent = 'Refreshing…';
+        const restore = () => { button.disabled = false; button.textContent = original; };
+        // requestJson owns the visible global fetch indicator; restore after the refresh promise settles.
+        const waitForRefresh = () => {
+          if (!button.isConnected) return;
+          const overlay = document.getElementById('globalLoading');
+          if (overlay && overlay.classList.contains('visible')) window.setTimeout(waitForRefresh, 120);
+          else restore();
+        };
+        window.setTimeout(waitForRefresh, 120);
+      });
+      // Export a tiny UX helper for existing handlers without changing API contracts.
+      window.remanUX = { showToast, showInlineLoading };
+      document.addEventListener('submit', event => {
+        const form = event.target;
+        const submit = form.querySelector('button[type="submit"],input[type="submit"]');
+        if (!submit || form.id === 'loginForm') return;
+        if (form.dataset.remanSubmitting === 'true') return;
+        form.dataset.remanSubmitting = 'true';
+        const initial = submit.dataset.initialLabel || submit.textContent.trim() || 'Submit';
+        if (!submit.dataset.initialHtml) submit.dataset.initialHtml = submit.innerHTML;
+        submit.dataset.initialLabel = initial;
+        submit.disabled = true;
+        submit.setAttribute('aria-busy', 'true');
+        submit.dataset.busy = 'true';
+        const busyLabel = /password/i.test(initial) ? 'Updating…' : /save/i.test(initial) ? 'Saving…' : 'Submitting…';
+        submit.innerHTML = `<span class="button-spinner" aria-hidden="true"></span><span>${busyLabel}</span>`;
+        // Keep the action locked only while the visible request is in flight.
+        const restoreSubmit = () => {
+          if (!form.isConnected) return;
+          const overlay = document.getElementById('globalLoading');
+          if (overlay && overlay.classList.contains('visible') && Date.now() - startedAt < 60000) {
+            window.setTimeout(restoreSubmit, 140);
+            return;
+          }
+          delete form.dataset.remanSubmitting;
+          if (submit.isConnected && submit.dataset.busy === 'true') {
+            submit.disabled = false;
+            submit.innerHTML = submit.dataset.initialHtml || initial;
+            delete submit.dataset.initialHtml;
+            submit.removeAttribute('aria-busy');
+            delete submit.dataset.busy;
+          }
+        };
+        const startedAt = Date.now();
+        window.setTimeout(restoreSubmit, 180);
+      }, true);
+    })();
+  </script>
+
 </body>
 </html>
