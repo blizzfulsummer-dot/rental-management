@@ -150,18 +150,20 @@ export default {
     if (url.pathname === '/' || url.pathname === '/index.html') {
       try {
         // Try ASSETS binding first (production)
-        if (env.ASSETS) {
-          const file = await env.ASSETS.get('index.html');
-          if (file) {
-            return new Response(file, {
-              status: 200,
-              headers: {
-                'Content-Type': 'text/html',
-                'Cache-Control': 'public, max-age=3600'
-              }
-            });
+       // Serve static files through the Cloudflare Assets binding.
+      if (url.pathname === '/' || url.pathname === '/index.html') {
+          if (env.ASSETS) {
+              return env.ASSETS.fetch(request);
           }
+
+        return new Response('Static Assets binding is unavailable.', {
+          status: 500,
+          headers: {
+          'Content-Type': 'text/plain',
+          'Cache-Control': 'no-store'
         }
+        });
+      }
       } catch (e) {
         // Fall through to serve fallback
       }

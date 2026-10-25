@@ -1,0 +1,52 @@
+{
+	"name": "rental-ehexibit",
+	"main": "src/worker.js",
+	"workers_dev": true,
+	"compatibility_date": "2026-01-26",
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"enabled": true
+		}
+	},
+	"assets": {
+    			"directory": "./public",
+    			"binding": "ASSETS",
+    			"run_worker_first": true
+	},
+	"secrets_store_secrets": [
+		{
+			"binding": "JWT_SCRT",
+			"store_id": "fa13ff7b9ca5473899f48948ce606aa3",
+			"secret_name": "JWT_SCRT"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_id": "e9d8368d-f999-430a-9cd0-be7e33007c10"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "HOUSE_ROOM",
+				"class_name": "HouseRoom"
+			},
+			{
+      			"name": "DEVICE_ROOM",
+      			"class_name": "DeviceRoom"
+    		}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["HouseRoom"]
+		},
+  		{
+    		"tag": "v2",
+    		"new_sqlite_classes": ["DeviceRoom"]
+  		}
+	]
+}
