@@ -747,24 +747,40 @@ export class HouseRoom {
   // ---------------------------------------------------------
 
   async handleFingerprintEvent(ws, deviceSession, message) {
-    const fingerprintId = Number(message.id);
+    const isScanError = message.event === "scan_error";
+  const hasId =
+    message.id !== undefined &&
+    message.id !== null &&
+    message.id !== "";
 
+  const fingerprintId = hasId ? Number(message.id) : null;
+
+  // A scan error does not identify a stored fingerprint.
+  // Permit ID 0 or an omitted ID only for this event.
+  if (isScanError) {
     if (
-      !Number.isInteger(fingerprintId) ||
-      fingerprintId < 1 ||
-      fingerprintId > 127
+      hasId &&
+      (!Number.isInteger(fingerprintId) || fingerprintId !== 0)
     ) {
       this.sendError(ws, "Invalid fingerprint event ID");
       return;
     }
+  } else if (
+    !Number.isInteger(fingerprintId) ||
+    fingerprintId < 1 ||
+    fingerprintId > 127
+  ) {
+    this.sendError(ws, "Invalid fingerprint event ID");
+    return;
+  }
 
-    const forwarded = {
-      ...message,
-      deviceId: deviceSession.deviceId,
-      fromDeviceSessionId: deviceSession.sessionId,
-      timestamp: new Date().toISOString()
-    };
-
+  const forwarded = {
+    ...message,
+    deviceId: deviceSession.deviceId,
+    fromDeviceSessionId: deviceSession.sessionId,
+    timestamp: new Date().toISOString()
+  };
+  
     try {
       let eventUserId = null;
 
