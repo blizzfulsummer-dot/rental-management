@@ -1005,16 +1005,16 @@
 
     function getRoleViews() {
       if (state.role === 'admin' || state.role === 'owner') {
-        return ['overview', 'houses', 'tenants', 'devices'];
+        return ['overview', 'property', 'tenants', 'devices'];
       }
-      return ['overview', 'houses', 'devices'];
+      return ['overview', 'property', 'devices'];
     }
 
     function renderViewTabs() {
       const views = getRoleViews();
       const labels = {
         overview: 'Overview',
-        houses: 'Houses',
+        property: 'Property',
         tenants: 'Tenants',
         devices: 'Devices'
       };
@@ -1145,7 +1145,7 @@
         ['Name', profile.name || 'Not provided'],
         ['Email', profile.email || 'Not provided'],
         ['Role', formatRole(state.role)],
-        ['House', assignedHouse ? assignedHouse.name : 'No assigned house'],
+        ['Property', assignedHouse ? assignedHouse.name : 'No assigned property'],
         ['Location', assignedHouse ? (assignedHouse.location || 'N/A') : 'N/A']
       ];
 
