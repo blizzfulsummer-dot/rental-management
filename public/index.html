@@ -1119,8 +1119,8 @@
       if (role === 'tenant' || role === 'user') {
         cards = [
           { label: 'Assigned House', value: state.houses.length || 0 },
-          { label: 'Devices', value: state.devices.length },
-          { label: 'Role', value: formatRole(role).slice(0, 6) }
+          { label: 'Devices', value: state.devices.length }/*,
+          { label: 'Role', value: formatRole(role).slice(0, 6) }*/
         ];
       }
 
@@ -1167,7 +1167,7 @@
         <article class="house-card house-card-clickable" role="button" tabindex="0" aria-label="Open devices for ${escapeHtml(house.name || `House ${house.id}`)}" data-open-house="${house.id}">
           <div class="house-card-top"><span class="tag">House</span><span class="card-arrow" aria-hidden="true">↗</span></div>
           <h3>${escapeHtml(house.name || 'Unnamed House')}</h3>
-          <div class="meta">${escapeHtml(house.location || 'No location')}<br />Owner ID: ${escapeHtml(house.owner_id || 'N/A')}</div>
+          <div class="meta">${escapeHtml(house.location || 'No location')}<br /><br />ID: ${escapeHtml(house.house_uid || 'N/A')}</div>
           <div class="house-card-footer"><span>Manage connected devices</span><span aria-hidden="true">→</span></div>
         </article>
       `).join('');

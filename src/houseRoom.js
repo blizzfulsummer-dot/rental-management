@@ -392,7 +392,7 @@ export class HouseRoom {
             return;
           }
 
-          this.handleDeviceResponse(
+         await this.handleDeviceResponse(
             ws,
             session,
             message
@@ -724,7 +724,8 @@ export class HouseRoom {
     }
   }
 
-  handleDeviceResponse(ws, session, message) {
+  
+  async handleDeviceResponse(ws, session, message) {
     if (Number(message.deviceId) !== session.deviceId) {
       this.sendError(
         ws,
@@ -733,6 +734,53 @@ export class HouseRoom {
       return;
     }
 
+    const commandId = message.commandId
+      ? String(message.commandId)
+      : null;
+
+    if (commandId) {
+      const storageKey = `pending-command:${commandId}`;
+      const pending = await this.state.storage.get(storageKey);
+
+      // Ignore a response that doesn't match this device.
+      if (
+        pending &&
+        pending.targetDeviceId === session.deviceId
+      ) {
+        if (Date.now() >= pending.deadline) {
+          await this.state.storage.delete(storageKey);
+
+          this.broadcastToClients({
+            type: "command_timeout",
+            commandId,
+            targetDeviceId: session.deviceId,
+            command: pending.command,
+            status: "unresponsive",
+            error: "Device response arrived after the timeout",
+            timestamp: new Date().toISOString()
+          }, null, "web");
+        } else {
+          await this.state.storage.delete(storageKey);
+
+          this.broadcastToClients({
+            type: "command_result",
+            commandId,
+            targetDeviceId: session.deviceId,
+            command: pending.command,
+            success: message.success !== false,
+            response: message,
+            status: message.success === false
+              ? "failed"
+              : "acknowledged",
+            timestamp: new Date().toISOString()
+          }, null, "web");
+        }
+
+        await this.scheduleNextAlarm();
+      }
+    }
+
+    // Preserve delivery of the original device response.
     this.broadcastToClients({
       ...message,
       type: "device_response",
@@ -741,6 +789,7 @@ export class HouseRoom {
       timestamp: new Date().toISOString()
     }, session.sessionId, "web");
   }
+
 
   // ---------------------------------------------------------
   // Fingerprint workflows
@@ -1096,8 +1145,14 @@ export class HouseRoom {
     );
   }
 
+ 
   async alarm() {
     const now = Date.now();
+
+    // First expire commands whose acknowledgement deadline passed.
+    await this.expirePendingCommands();
+
+    // Keep your existing stale-session watchdog.
     const staleThreshold = 5 * 60 * 1000;
 
     for (const session of this.getAllSessions()) {
@@ -1122,10 +1177,87 @@ export class HouseRoom {
       }
     }
 
-    // Keep the stale-session watchdog running only while this room
-    // has active connections.
-    if (this.getAllSessions().length > 0) {
-      await this.state.storage.setAlarm(Date.now() + 60_000);
+    // Schedule the next command deadline or watchdog check.
+    await this.scheduleNextAlarm();
+  }
+  
+  // ---------------------------------------------------------
+  // Command acknowledgement and timeout tracking
+  // ---------------------------------------------------------
+
+  async scheduleNextAlarm() {
+    const pending = await this.state.storage.list({
+      prefix: "pending-command:"
+    });
+
+    let nextDeadline = Date.now() + 60_000;
+
+    for (const command of pending.values()) {
+      if (Number.isFinite(command.deadline)) {
+        nextDeadline = Math.min(
+          nextDeadline,
+          command.deadline
+        );
+      }
+    }
+
+    if (this.getAllSessions().length === 0 && pending.size === 0) {
+      return;
+    }
+
+    await this.state.storage.setAlarm(nextDeadline);
+  }
+
+  async expirePendingCommands() {
+    const now = Date.now();
+    const pending = await this.state.storage.list({
+      prefix: "pending-command:"
+    });
+
+    for (const [key, command] of pending) {
+      if (command.deadline > now) continue;
+
+      // Delete before notifying, so duplicate alarm execution
+      // cannot report the same timeout more than once.
+      await this.state.storage.delete(key);
+
+      const timeoutMessage = {
+        type: "command_timeout",
+        commandId: command.commandId,
+        targetDeviceId: command.targetDeviceId,
+        command: command.command,
+        status: "unresponsive",
+        error: "Device did not acknowledge the command in time",
+        timeoutMs: command.timeoutMs,
+        timestamp: new Date().toISOString()
+      };
+
+      // Notify the original requester if still connected.
+      const requester = this.getAllSessions().find(
+        session =>
+          session.sessionId === command.fromSessionId &&
+          session.clientType === "web"
+      );
+
+      if (requester) {
+        this.send(requester.ws, timeoutMessage);
+      }
+
+      // Also notify other web sessions viewing this device.
+      for (const session of this.getAllSessions()) {
+        if (
+          session.clientType === "web" &&
+          session.deviceId === command.targetDeviceId &&
+          session.sessionId !== command.fromSessionId
+        ) {
+          this.send(session.ws, timeoutMessage);
+        }
+      }
+
+      console.warn(
+        `[HouseRoom ${this.houseId}] Command ${command.commandId} timed out for device ${command.targetDeviceId}`
+      );
     }
   }
+
 }
