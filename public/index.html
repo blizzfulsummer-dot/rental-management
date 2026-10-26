@@ -1111,14 +1111,14 @@
     function renderStats() {
       const role = state.role;
       let cards = [
-        { label: 'Houses', value: state.houses.length },
+        { label: 'Properties', value: state.houses.length },
         { label: 'Tenants', value: state.tenants.length },
         { label: 'Assigned Devices', value: state.devices.length }
       ];
 
       if (role === 'tenant' || role === 'user') {
         cards = [
-          { label: 'Assigned House', value: state.houses.length || 0 },
+          { label: 'Assigned Property', value: state.houses.length || 0 },
           { label: 'Devices', value: state.devices.length }/*,
           { label: 'Role', value: formatRole(role).slice(0, 6) }*/
         ];
@@ -1894,7 +1894,7 @@
       }
 
       if (state.activeView === 'houses') {
-        mainPanelTitle.textContent = role === 'admin' ? 'All Houses' : role === 'owner' ? 'My Houses' : 'Assigned Houses';
+        mainPanelTitle.textContent = role === 'admin' ? 'All Houses' : role === 'owner' ? 'My Houses' : 'Assigned Properties';
         renderHouseList();
         return;
       }
