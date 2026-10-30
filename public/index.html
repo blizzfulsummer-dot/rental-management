@@ -802,6 +802,31 @@
     .auth-dialog .alert{margin-top:12px}
     .auth-dialog .auth-link{margin-top:8px}
 
+
+    /* Account management refinement */
+    .account-toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin:4px 0 18px}
+    .account-toolbar input,.account-toolbar select{min-height:42px;border:1px solid var(--border);border-radius:11px;padding:9px 12px;background:#fff;color:var(--text)}
+    .account-toolbar input{flex:1;min-width:190px}
+    .account-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:14px}
+    .account-card{border:1px solid var(--border);border-radius:15px;padding:17px;background:#fff;min-width:0}
+    .account-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+    .account-card h3{font-size:16px;margin:0 0 5px;overflow-wrap:anywhere}
+    .account-role{font-size:11px;letter-spacing:.06em;font-weight:800;padding:5px 8px;border-radius:20px;background:#eef4ff;color:#315db4;white-space:nowrap}
+    .account-detail{font-size:13px;line-height:1.65;color:var(--muted);margin:12px 0}
+    .account-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .account-actions button,.mini-btn{cursor:pointer}
+    .account-dialog{width:min(720px,calc(100% - 24px));max-height:90vh;overflow:auto;border:0;border-radius:20px;padding:24px;box-shadow:0 24px 80px #0f172a33}
+    .account-dialog::backdrop{background:#0f172a88;backdrop-filter:blur(3px)}
+    .account-dialog form{display:grid;gap:14px}
+    .account-dialog .tenant-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .account-dialog .field{margin:0;min-width:0}
+    .account-dialog .field input,.account-dialog .field select{width:100%;min-height:43px}
+    .account-dialog select[multiple]{min-height:112px}
+    .account-dialog .dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:6px}
+    .account-dialog .dialog-actions button{width:auto;min-width:110px}
+    .account-hint{font-size:12px;color:var(--muted);margin:-5px 0 0}
+    @media(max-width:620px){.account-dialog{padding:18px}.account-dialog .tenant-form-grid{grid-template-columns:1fr}.account-toolbar>*{width:100%}}
+
   </style>
 </head>
 <body>
@@ -903,6 +928,28 @@
     </form>
   </dialog>
 
+  <dialog id="accountEditorDialog" class="account-dialog" aria-labelledby="accountEditorTitle">
+    <div class="panel-header"><div><h2 id="accountEditorTitle">Create account</h2><p class="subtle" style="margin:4px 0 18px">Manage account details and property assignment.</p></div><button type="button" class="ghost-btn" data-close-account-dialog>Close</button></div>
+    <form id="accountEditorForm">
+      <input type="hidden" name="account_id" />
+      <div class="tenant-form-grid">
+        <div class="field"><label for="accountRole">Account type</label><select id="accountRole" name="role" required></select></div>
+        <div class="field"><label for="accountName">Full name</label><input id="accountName" name="name" maxlength="100" autocomplete="name" required /></div>
+        <div class="field"><label for="accountEmail">Email address</label><input id="accountEmail" name="email" type="email" autocomplete="email" required /></div>
+        <div class="field" id="accountHouseField"><label for="accountHouse">Assigned properties</label><select id="accountHouse" name="house_ids" multiple></select><p class="account-hint">Select one or more properties. Use Ctrl (Windows) or Command (Mac) to select multiple.</p></div>
+        <div class="field account-tenant-only"><label for="accountUnit">Leased unit</label><input id="accountUnit" name="leased_unit" /></div>
+        <div class="field account-tenant-only"><label for="accountRent">Rent amount</label><input id="accountRent" name="rent_amount" type="number" min="0" step="0.01" /></div>
+        <div class="field account-tenant-only"><label for="accountDeposit">Deposit</label><input id="accountDeposit" name="deposit" type="number" min="0" step="0.01" /></div>
+        <div class="field account-tenant-only"><label for="accountBalance">Balance</label><input id="accountBalance" name="balance" type="number" step="0.01" /></div>
+        <div class="field account-tenant-only"><label for="accountBillingCycle">Billing cycle</label><select id="accountBillingCycle" name="billing_cycle"><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option></select></div>
+        <div class="field account-tenant-only"><label for="accountOnboardDate">Move-in date</label><input id="accountOnboardDate" name="onboard_date" type="date" /></div>
+      </div>
+      <p id="accountEditorHint" class="account-hint">New accounts receive a temporary password and must change it on first sign-in.</p>
+      <div id="accountEditorAlert" class="alert" role="status" aria-live="polite"></div>
+      <div class="dialog-actions"><button type="button" class="secondary-btn" data-close-account-dialog>Cancel</button><button id="accountEditorSubmit" type="submit" class="primary-btn">Create account</button></div>
+    </form>
+  </dialog>
+
   <dialog id="signupDialog" class="auth-dialog" aria-labelledby="signupTitle">
     <h2 id="signupTitle">Create your ReMan account</h2>
     <p class="subtle">Register a standard user account. House and device access can be granted by an owner or administrator.</p>
@@ -967,11 +1014,14 @@
     const WS_BASE = API_BASE.replace(/^http/, 'ws');
 
     const state = {
-      jwt: '',
+      // Keep the access token in memory and persist it with the refresh token
+      // so a normal browser reload does not sign the user out.
+      jwt: (() => { try { return localStorage.getItem('accessToken') || ''; } catch { return ''; } })(),
       profile: null,
       role: null,
       houses: [],
       tenants: [],
+      accounts: [],
       selectedHouseId: null,
       devices: [],
       fingerprints: {},
@@ -1038,7 +1088,7 @@
         overview: 'Overview',
         property: 'Properties',
         access: 'House Access',
-        tenants: 'Tenants',
+        tenants: 'Accounts',
         devices: 'Devices'
       };
 
@@ -1080,24 +1130,87 @@
         overlay.setAttribute('aria-hidden', 'true');
       }
     }
+    let refreshInFlight = null;
+
+    function saveAuthTokens(accessToken, refreshToken) {
+      if (accessToken) state.jwt = accessToken;
+      try {
+        if (accessToken) localStorage.setItem('accessToken', accessToken);
+        if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+      } catch (error) {
+        console.warn('Unable to persist ReMan authentication tokens:', error);
+      }
+    }
+
+    function clearAuthTokens() {
+      state.jwt = '';
+      try {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('userProfile');
+        localStorage.removeItem('portalRole');
+      } catch (error) {
+        console.warn('Unable to clear ReMan authentication tokens:', error);
+      }
+    }
+
+    async function refreshAccessToken() {
+      if (refreshInFlight) return refreshInFlight;
+      refreshInFlight = (async () => {
+        let refreshToken = '';
+        try { refreshToken = localStorage.getItem('refreshToken') || ''; } catch {}
+        if (!refreshToken) return false;
+        try {
+          const response = await fetch(`${API_BASE}/api/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken })
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.accessToken) {
+            // Only discard credentials when the server explicitly rejects the
+            // refresh session. Network errors and server errors are recoverable.
+            if (response.status === 401 || response.status === 403) clearAuthTokens();
+            return false;
+          }
+          saveAuthTokens(data.accessToken, data.refreshToken);
+          return true;
+        } catch (error) {
+          console.warn('ReMan token refresh failed; keeping the saved session:', error);
+          return false;
+        }
+      })();
+      try { return await refreshInFlight; }
+      finally { refreshInFlight = null; }
+    }
+
     async function requestJson(url, options = {}) {
       setGlobalLoading(false);
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(options.headers || {})
-        }
+      const requestOptions = { ...options };
+      const originalHeaders = { ...(options.headers || {}) };
+      const send = headers => fetch(url, {
+        ...requestOptions,
+        headers: { 'Content-Type': 'application/json', ...headers }
       });
+      let response = await send(originalHeaders);
+      const isAuthEndpoint = /\/api\/(login|refresh)$/.test(String(url));
+      const hasBearer = Boolean(originalHeaders.Authorization || originalHeaders.authorization);
+      if (response.status === 401 && hasBearer && !isAuthEndpoint && await refreshAccessToken()) {
+        const retryHeaders = { ...originalHeaders };
+        delete retryHeaders.authorization;
+        retryHeaders.Authorization = `Bearer ${state.jwt}`;
+        response = await send(retryHeaders);
+      }
       const text = await response.text();
       let data = {};
       if (text) {
-        try {
-          data = JSON.parse(text);
-        } catch {
-          throw new Error(response.ok
+        try { data = JSON.parse(text); }
+        catch {
+          const error = new Error(response.ok
             ? 'The server returned an invalid response.'
             : `Request failed (${response.status}). Check the API server and try again.`);
+          error.status = response.status;
+          throw error;
         }
       }
       if (!response.ok) {
@@ -1356,151 +1469,132 @@
       });
     }
 
-    function renderTenantList() {
-      const registrableHouses = state.houses || [];
-      const houseOptions = registrableHouses.map(house => `
-        <option value="${escapeHtml(house.id)}">${escapeHtml(house.name || `House ${house.id}`)}${house.location ? ` - ${escapeHtml(house.location)}` : ''}</option>
-      `).join('');
-      const isAdmin = state.role === 'admin';
-      const tenantCards = state.tenants.map(tenant => `
-        <div class="tenant-card">
-          <h3>${escapeHtml(tenant.name || tenant.email || 'Tenant')}</h3>
-          <div class="meta">${escapeHtml(tenant.email || 'No email')}<br />Unit: ${escapeHtml(tenant.leased_unit || 'N/A')}<br />Rent: ${escapeHtml(tenant.rent_amount || 'N/A')}</div>
-          <div class="tag">Tenant</div>
-        </div>
-      `).join('');
-
-      mainPanelContent.innerHTML = `
-        <form id="accountRegistrationForm" class="tenant-registration-form">
-          <h3>Register an account</h3>
-          <div class="tenant-form-grid">
-            <div class="field">
-              <label for="accountRole">Account type</label>
-              <select id="accountRole" name="role" required>
-                ${isAdmin ? '<option value="owner">Owner</option>' : ''}
-                <option value="tenant">Tenant</option>
-                <option value="user">Regular user</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="accountName">Full name</label>
-              <input id="accountName" name="name" type="text" maxlength="100" autocomplete="name" required />
-            </div>
-            <div class="field">
-              <label for="accountEmail">Email</label>
-              <input id="accountEmail" name="email" type="email" autocomplete="email" required />
-            </div>
-            <div class="field" id="accountHouseField">
-              <label for="accountHouse">Assign to house</label>
-              <select id="accountHouse" name="house_id" required>
-                <option value="">Select a house</option>
-                ${houseOptions || '<option value="" disabled>No houses available</option>'}
-              </select>
-            </div>
-            <div class="field account-tenant-only">
-              <label for="accountUnit">Leased unit</label>
-              <input id="accountUnit" name="leased_unit" type="text" />
-            </div>
-            <div class="field account-tenant-only">
-              <label for="accountRent">Rent amount</label>
-              <input id="accountRent" name="rent_amount" type="number" min="0" step="0.01" />
-            </div>
-            <div class="field account-tenant-only">
-              <label for="accountDeposit">Deposit</label>
-              <input id="accountDeposit" name="deposit" type="number" min="0" step="0.01" value="0" />
-            </div>
-            <div class="field account-tenant-only">
-              <label for="accountBalance">Balance</label>
-              <input id="accountBalance" name="balance" type="number" min="0" step="0.01" value="0" />
-            </div>
-            <div class="field account-tenant-only">
-              <label for="accountBillingCycle">Billing cycle</label>
-              <select id="accountBillingCycle" name="billing_cycle">
-                <option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option>
-              </select>
-            </div>
-            <div class="field account-tenant-only">
-              <label for="accountOnboardDate">Move-in date</label>
-              <input id="accountOnboardDate" name="onboard_date" type="date" value="${new Date().toISOString().slice(0, 10)}" />
-            </div>
-          </div>
-          <button class="primary-btn" type="submit" ${registrableHouses.length ? '' : 'disabled'}>Register account and assign</button>
-          ${registrableHouses.length ? '' : '<p class="meta">Add a house you manage before registering and assigning an account.</p>'}
-          <div id="accountRegistrationAlert" class="alert" role="status" aria-live="polite"></div>
-        </form>
-        <h3>Current tenants</h3>
-        ${tenantCards ? `<div class="card-grid">${tenantCards}</div>` : '<div class="empty">No tenants registered in this account scope.</div>'}
-      `;
-
-      const form = document.getElementById('accountRegistrationForm');
-      const roleSelect = document.getElementById('accountRole');
-      const tenantFields = [...form.querySelectorAll('.account-tenant-only')];
-      const syncRoleFields = () => {
-        const isTenant = roleSelect.value === 'tenant';
-        tenantFields.forEach(field => {
-          field.hidden = !isTenant;
-          field.querySelectorAll('input, select').forEach(input => input.required = isTenant);
-        });
-      };
-      roleSelect.addEventListener('change', syncRoleFields);
-      syncRoleFields();
-      form.addEventListener('submit', handleAccountRegistration);
+    function getManageableHouses() {
+      if (state.role === 'admin') return state.houses || [];
+      return (state.houses || []).filter(house => Number(house.owner_id) === Number(state.profile?.id));
     }
 
-    async function handleAccountRegistration(event) {
+    function canEditAccount(account) {
+      if (state.role === 'admin') return true;
+      if (state.role !== 'owner' || account.role === 'owner' || account.role === 'admin') return false;
+      const ownedIds = new Set(getManageableHouses().map(h => Number(h.id)));
+      return (account.house_ids || []).some(id => ownedIds.has(Number(id)));
+    }
+
+    function renderTenantList() {
+      const accounts = (state.accounts || []).filter(account => ['owner','tenant','user'].includes(String(account.role).toLowerCase()));
+      const cards = accounts.map(account => {
+        const houses = (account.house_names || []).filter(Boolean).join(', ');
+        const tenantInfo = account.role === 'tenant'
+          ? `<br>Unit: ${escapeHtml(account.leased_unit || '—')} · Rent: ${escapeHtml(account.rent_amount ?? '—')} · Balance: ${escapeHtml(account.balance ?? '—')}`
+          : '';
+        return `<article class="account-card">
+          <div class="account-card-head"><div><h3>${escapeHtml(account.name || 'Unnamed account')}</h3><div class="meta">${escapeHtml(account.email || '')}</div></div><span class="account-role">${escapeHtml(formatRole(account.role))}</span></div>
+          <div class="account-detail">Properties: ${escapeHtml(houses || (account.role === 'owner' ? 'Property owner' : 'Not assigned'))}${tenantInfo}</div>
+          <div class="account-actions">${canEditAccount(account) ? `<button type="button" class="mini-btn" data-edit-account="${escapeHtml(account.id)}">Edit account</button>` : '<span class="meta">View only</span>'}</div>
+        </article>`;
+      }).join('');
+      const manageableHouses = getManageableHouses();
+      mainPanelContent.innerHTML = `
+        <div class="account-toolbar"><input id="accountSearch" type="search" placeholder="Search name or email" aria-label="Search accounts"><select id="accountRoleFilter" aria-label="Filter by role"><option value="all">All account types</option><option value="owner">Owners</option><option value="tenant">Tenants</option><option value="user">Regular users</option></select><button type="button" id="createAccountBtn" class="primary-btn" style="width:auto">+ Create account</button></div>
+        <div id="accountGrid" class="account-grid">${cards || '<div class="empty">No accounts found in your management scope.</div>'}</div>`;
+      document.getElementById('createAccountBtn').addEventListener('click', () => openAccountEditor());
+      const applyFilters = () => {
+        const query = document.getElementById('accountSearch').value.trim().toLowerCase();
+        const role = document.getElementById('accountRoleFilter').value;
+        const filtered = accounts.filter(a => (role === 'all' || a.role === role) && `${a.name || ''} ${a.email || ''}`.toLowerCase().includes(query));
+        document.getElementById('accountGrid').innerHTML = filtered.length ? filtered.map(account => {
+          const houses = (account.house_names || []).filter(Boolean).join(', ');
+          const tenantInfo = account.role === 'tenant' ? `<br>Unit: ${escapeHtml(account.leased_unit || '—')} · Rent: ${escapeHtml(account.rent_amount ?? '—')} · Balance: ${escapeHtml(account.balance ?? '—')}` : '';
+          return `<article class="account-card"><div class="account-card-head"><div><h3>${escapeHtml(account.name || 'Unnamed account')}</h3><div class="meta">${escapeHtml(account.email || '')}</div></div><span class="account-role">${escapeHtml(formatRole(account.role))}</span></div><div class="account-detail">Properties: ${escapeHtml(houses || (account.role === 'owner' ? 'Property owner' : 'Not assigned'))}${tenantInfo}</div><div class="account-actions">${canEditAccount(account) ? `<button type="button" class="mini-btn" data-edit-account="${escapeHtml(account.id)}">Edit account</button>` : '<span class="meta">View only</span>'}</div></article>`;
+        }).join('') : '<div class="empty">No matching accounts.</div>';
+        document.querySelectorAll('[data-edit-account]').forEach(button => button.addEventListener('click', () => {
+          const account = accounts.find(item => Number(item.id) === Number(button.dataset.editAccount));
+          if (account) openAccountEditor(account);
+        }));
+      };
+      document.getElementById('accountSearch').addEventListener('input', applyFilters);
+      document.getElementById('accountRoleFilter').addEventListener('change', applyFilters);
+      applyFilters();
+    }
+
+    function openAccountEditor(account = null) {
+      const dialog = document.getElementById('accountEditorDialog');
+      const form = document.getElementById('accountEditorForm');
+      const roles = document.getElementById('accountRole');
+      const houseSelect = document.getElementById('accountHouse');
+      const isEdit = Boolean(account);
+      const manageableHouses = getManageableHouses();
+      const allowedRoles = state.role === 'admin' ? ['owner','tenant','user'] : ['tenant','user'];
+      roles.innerHTML = allowedRoles.map(role => `<option value="${role}">${role === 'user' ? 'Regular user' : role[0].toUpperCase()+role.slice(1)}</option>`).join('');
+      if (account && !allowedRoles.includes(account.role)) return;
+      houseSelect.innerHTML = manageableHouses.map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name || `House ${h.id}`)}</option>`).join('');
+      form.reset();
+      form.elements.account_id.value = account?.id || '';
+      roles.value = account?.role || (state.role === 'admin' ? 'owner' : 'tenant');
+      roles.disabled = isEdit; // Role changes require a separate migration workflow.
+      form.elements.name.value = account?.name || '';
+      form.elements.email.value = account?.email || '';
+      [...houseSelect.options].forEach(option => option.selected = (account?.house_ids || []).map(Number).includes(Number(option.value)));
+      form.elements.leased_unit.value = account?.leased_unit || '';
+      form.elements.rent_amount.value = account?.rent_amount ?? '';
+      form.elements.deposit.value = account?.deposit ?? 0;
+      form.elements.balance.value = account?.balance ?? 0;
+      form.elements.billing_cycle.value = account?.billing_cycle || 'monthly';
+      form.elements.onboard_date.value = account?.onboard_date ? String(account.onboard_date).slice(0,10) : new Date().toISOString().slice(0,10);
+      document.getElementById('accountEditorTitle').textContent = isEdit ? 'Edit account' : 'Create account';
+      document.getElementById('accountEditorSubmit').textContent = isEdit ? 'Save changes' : 'Create account';
+      document.getElementById('accountEditorHint').textContent = isEdit ? 'Email and account details will be updated. Passwords and existing device permissions are not changed.' : 'New accounts receive a temporary password and must change it on first sign-in.';
+      clearAlert(document.getElementById('accountEditorAlert'));
+      const sync = () => {
+        const isTenant = roles.value === 'tenant';
+        document.querySelectorAll('#accountEditorForm .account-tenant-only').forEach(field => {
+          field.hidden = !isTenant;
+          field.querySelectorAll('input,select').forEach(input => input.required = isTenant && input.name === 'rent_amount');
+        });
+        document.getElementById('accountHouseField').hidden = roles.value === 'owner';
+        houseSelect.required = roles.value !== 'owner';
+        houseSelect.multiple = roles.value === 'user';
+      };
+      roles.onchange = sync;
+      sync();
+      dialog.showModal();
+    }
+
+    async function handleAccountEditor(event) {
       event.preventDefault();
       const form = event.currentTarget;
-      const button = form.querySelector('button[type="submit"]');
-      const alert = document.getElementById('accountRegistrationAlert');
+      const button = document.getElementById('accountEditorSubmit');
+      const alert = document.getElementById('accountEditorAlert');
       const values = new FormData(form);
       const role = String(values.get('role') || '').toLowerCase();
-      const houseId = Number(values.get('house_id'));
-      if (!houseId || !state.houses.some(h => Number(h.id) === houseId)) {
-        showAlert(alert, 'Select a valid house to assign this account.', 'error');
-        return;
-      }
-      const payload = {
-        role,
-        name: String(values.get('name') || '').trim(),
-        email: String(values.get('email') || '').trim()
-      };
-      if (role === 'tenant') {
-        Object.assign(payload, {
-          house_id: houseId,
-          leased_unit: values.get('leased_unit'),
-          rent_amount: Number(values.get('rent_amount')),
-          deposit: Number(values.get('deposit')),
-          balance: Number(values.get('balance')),
-          billing_cycle: values.get('billing_cycle'),
-          onboard_date: values.get('onboard_date')
-        });
-      }
-      if (role === 'owner') {
-        showAlert(alert, 'Owner registration requires the Worker account-management endpoint. The current signup endpoint does not safely support assigning an owner to a house.', 'error');
-        return;
-      }
-
-      button.disabled = true;
+      const accountId = String(values.get('account_id') || '').trim();
+      const houseSelect = document.getElementById('accountHouse');
+      const houseIds = [...houseSelect.selectedOptions].map(option => Number(option.value)).filter(Boolean);
+      const payload = { role, name: String(values.get('name') || '').trim(), email: String(values.get('email') || '').trim(), house_ids: houseIds };
+      if (!payload.name || !payload.email) return showAlert(alert, 'Name and email are required.', 'error');
+      if (role !== 'owner' && !houseIds.length) return showAlert(alert, 'Assign at least one property to this account.', 'error');
+      if (role === 'tenant') Object.assign(payload, {
+        house_id: houseIds[0], leased_unit: String(values.get('leased_unit') || '').trim(),
+        rent_amount: Number(values.get('rent_amount')), deposit: Number(values.get('deposit') || 0),
+        balance: Number(values.get('balance') || 0), billing_cycle: String(values.get('billing_cycle') || 'monthly'),
+        onboard_date: String(values.get('onboard_date') || '')
+      });
+      setButtonBusy(button, true, 'Saving…');
       try {
-        const created = await requestJson(`${API_BASE}/api/signup`, {
-          method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload)
-        });
-        if (role === 'user') {
-          await requestJson(`${API_BASE}/api/houses/${houseId}/access`, {
-            method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ user_id: created.user?.id || created.id })
-          });
+        if (accountId) {
+          await requestJson(`${API_BASE}/api/accounts/${encodeURIComponent(accountId)}`, { method:'PUT', headers:getAuthHeaders(), body:JSON.stringify(payload) });
+          showAlert(alert, 'Account updated successfully.', 'success');
+        } else {
+          const created = await requestJson(`${API_BASE}/api/provisioning/register`, { method:'POST', headers:getAuthHeaders(), body:JSON.stringify(payload) });
+          showAlert(alert, created.tempPassword ? `Account created. Temporary password: ${created.tempPassword}. Share it securely; the user must change it after signing in.` : 'Account created successfully.', 'success');
         }
-        showAlert(alert, created.tempPassword
-          ? `${role === 'tenant' ? 'Tenant' : 'User'} registered and assigned. Temporary password: ${created.tempPassword}. They must change it after signing in.`
-          : `${role === 'tenant' ? 'Tenant' : 'User'} registered and assigned successfully.`, 'success');
-        if (role === 'tenant') state.tenants.unshift({ name: payload.name, email: payload.email, leased_unit: payload.leased_unit, rent_amount: payload.rent_amount });
         await loadDashboardData();
-        renderStats();
-        renderMainPanel();
+        window.setTimeout(() => { if (dialogOpen()) document.getElementById('accountEditorDialog').close(); }, 900);
       } catch (error) {
-        showAlert(alert, error.message || 'Account registration failed.', 'error');
-        button.disabled = false;
-      }
+        showAlert(alert, error.message || 'Unable to save account.', 'error');
+      } finally { setButtonBusy(button, false); }
+      function dialogOpen(){ return document.getElementById('accountEditorDialog').open; }
     }
 
     function renderDeviceList() {
@@ -2129,6 +2223,7 @@
       state.fingerprints = {};
       state.deviceAccess = {};
       state.tenants = [];
+      state.accounts = [];
       state.provisionableUsers = [];
       try {
         const housesResponse = await fetch(`${API_BASE}/api/houses`, { headers });
@@ -2141,6 +2236,8 @@
         if (state.role === 'admin' || state.role === 'owner') {
           const provisionableUsers = await requestJson(`${API_BASE}/api/provisioning/users`, { headers });
           state.provisionableUsers = Array.isArray(provisionableUsers.users) ? provisionableUsers.users : [];
+          const accountsResponse = await requestJson(`${API_BASE}/api/accounts`, { headers });
+          state.accounts = Array.isArray(accountsResponse.accounts) ? accountsResponse.accounts : [];
           const tenantsResponse = await fetch(`${API_BASE}/api/tenants`, { headers });
           const tenantsData = await tenantsResponse.json().catch(() => ({}));
           if (!tenantsResponse.ok) {
@@ -2206,21 +2303,24 @@
           body: JSON.stringify({ email, password })
         });
 
-        state.jwt = loginResponse.accessToken;
-        const meResponse = await fetch(`${API_BASE}/api/me`, {
+        if (!loginResponse.accessToken) {
+          throw new Error('The login response did not include an access token.');
+        }
+        saveAuthTokens(loginResponse.accessToken, loginResponse.refreshToken);
+        const meData = await requestJson(`${API_BASE}/api/me`, {
           method: 'GET',
           headers: getAuthHeaders()
         });
-
-        const meData = meResponse.ok ? await meResponse.json() : null;
-        if (!meData || !meData.user) {
-          throw new Error('Could not load user profile');
-        }
+        if (!meData || !meData.user) throw new Error('Could not load user profile');
 
         state.profile = meData.user;
         state.profile.requires_change_password = Number(meData.user.requires_change_password) === 1;
         state.role = String(meData.user.role || 'user').toLowerCase();
         state.activeView = 'overview';
+        try {
+          localStorage.setItem('userProfile', JSON.stringify(meData.user));
+          localStorage.setItem('portalRole', state.role);
+        } catch {}
         userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
         userRole.textContent = formatRole(state.role);
 
@@ -2246,8 +2346,51 @@
       }
     }
 
+    async function restoreSession() {
+      let refreshToken = '';
+      try { refreshToken = localStorage.getItem('refreshToken') || ''; } catch {}
+      if (!state.jwt && !refreshToken) return;
+
+      try {
+        if (!state.jwt && refreshToken) {
+          const refreshed = await refreshAccessToken();
+          if (!refreshed) return; // Keep credentials on temporary/network failures.
+        }
+        const meData = await requestJson(`${API_BASE}/api/me`, {
+          method: 'GET',
+          headers: getAuthHeaders()
+        });
+        if (!meData?.user) throw new Error('Could not restore the ReMan user profile.');
+
+        state.profile = meData.user;
+        state.profile.requires_change_password = Number(meData.user.requires_change_password) === 1;
+        state.role = String(meData.user.role || 'user').toLowerCase();
+        state.activeView = 'overview';
+        try {
+          localStorage.setItem('userProfile', JSON.stringify(meData.user));
+          localStorage.setItem('portalRole', state.role);
+        } catch {}
+        userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
+        userRole.textContent = formatRole(state.role);
+        renderViewTabs();
+        setActiveScreen('dashboard');
+        if (state.profile.requires_change_password) {
+          document.getElementById('passwordRequiredDialog').showModal();
+        }
+        await loadDashboardData();
+      } catch (error) {
+        console.warn('Could not restore ReMan session:', error);
+        // Do not log the user out for transient API/network failures. A refresh
+        // token rejected with 401/403 is already cleared by refreshAccessToken.
+        let remainingRefreshToken = '';
+        try { remainingRefreshToken = localStorage.getItem('refreshToken') || ''; } catch {}
+        if (error.status === 401 && !remainingRefreshToken) clearAuthTokens();
+        setActiveScreen('login');
+      }
+    }
+
     async function handleLogout() {
-      state.jwt = '';
+      clearAuthTokens();
       state.profile = null;
       state.role = null;
       state.houses = [];
@@ -2438,6 +2581,12 @@
     document.getElementById('passwordForm').addEventListener('submit', handlePasswordUpdate);
     document.getElementById('passwordRequiredForm').addEventListener('submit', handleRequiredPasswordUpdate);
     document.getElementById('passwordRequiredDialog').addEventListener('cancel', event => event.preventDefault());
+
+    // Restore the saved ReMan session after the page has initialized.
+    document.querySelectorAll('[data-close-account-dialog]').forEach(button => button.addEventListener('click', () => document.getElementById('accountEditorDialog').close()));
+    document.getElementById('accountEditorForm').addEventListener('submit', handleAccountEditor);
+
+    restoreSession();
 
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && loginScreen.classList.contains('active')) {
