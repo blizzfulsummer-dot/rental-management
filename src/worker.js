@@ -13,6 +13,7 @@ import {
   listProvisionableUsers,
   listTenants,
   manageDeviceAccess,
+  manageHouseAccess,
   rotateDevicePairingKey,
   updateDevice,
   updateHouse,
@@ -265,6 +266,69 @@ export default {
       }
 
       if (url.pathname.startsWith('/api/houses/')) {
+
+                // House access management
+        const houseAccessMatch = url.pathname.match(
+          /^\/api\/houses\/(\d+)\/access(?:\/(\d+))?$/
+        );
+
+        if (houseAccessMatch) {
+          const houseId = houseAccessMatch[1];
+          const targetUserId = houseAccessMatch[2] || null;
+
+          if (
+            request.method === 'GET' &&
+            !targetUserId
+          ) {
+            return withCors(
+              await manageHouseAccess(
+                request,
+                env,
+                authUser.user,
+                houseId
+              ),
+              allowOrigin
+            );
+          }
+
+          if (
+            request.method === 'POST' &&
+            !targetUserId
+          ) {
+            return withCors(
+              await manageHouseAccess(
+                request,
+                env,
+                authUser.user,
+                houseId
+              ),
+              allowOrigin
+            );
+          }
+
+          if (
+            request.method === 'DELETE' &&
+            targetUserId
+          ) {
+            return withCors(
+              await manageHouseAccess(
+                request,
+                env,
+                authUser.user,
+                houseId,
+                targetUserId
+              ),
+              allowOrigin
+            );
+          }
+
+          return withCors(
+            json({ error: 'Method not allowed or invalid route' }, 405),
+            allowOrigin
+          );
+        }
+
+
         const pathParts = url.pathname.split('/').filter(Boolean);
         const isHouseDevicesRoute = /^\/api\/houses\/\d+\/devices$/.test(url.pathname);
 
@@ -309,6 +373,8 @@ export default {
           return withCors(await deleteHouse(request, env, authUser.user, id), allowOrigin);
         }
       }
+
+
 
       if (url.pathname.startsWith('/api/devices/')) {
         const pathParts = url.pathname.split('/').filter(Boolean);

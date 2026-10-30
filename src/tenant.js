@@ -375,26 +375,17 @@ export async function deleteTenant(request, env, authUser, tenantId) {
 async function userHasHouseAccess(env, userId, houseId) {
   if (!userId || !houseId) return false;
 
-  const directOwner = await env.DB
-    .prepare('SELECT id FROM houses WHERE id = ? AND owner_id = ?')
-    .bind(houseId, userId)
-    .first();
-
-  if (directOwner) return true;
-
-  const accessRow = await env.DB
-    .prepare('SELECT id FROM user_house_access WHERE user_id = ? AND house_id = ?')
+  const row = await env.DB
+    .prepare(`
+      SELECT 1
+      FROM user_house_access
+      WHERE user_id = ? AND house_id = ?
+      LIMIT 1
+    `)
     .bind(userId, houseId)
     .first();
 
-  if (accessRow) return true;
-
-  const tenantRow = await env.DB
-    .prepare('SELECT t.id FROM tenants t JOIN user_house_access uha ON uha.house_id = ? WHERE t.user_id = ? AND uha.user_id = ? LIMIT 1')
-    .bind(houseId, userId, userId)
-    .first();
-
-  return Boolean(tenantRow);
+  return Boolean(row);
 }
 
 export async function listHouses(request, env, authUser) {
@@ -630,34 +621,12 @@ export async function listProvisionableUsers(request, env, authUser) {
   }
 
   try {
-    const rows = authUser.role === 'admin'
-      ? await env.DB.prepare(`
-          SELECT id, email, name, role
-          FROM users
-          WHERE role IN ('tenant', 'user')
-          ORDER BY name, email
-        `).all()
-      : await env.DB.prepare(`
-          SELECT DISTINCT u.id, u.email, u.name, u.role
-          FROM users u
-          WHERE u.role IN ('tenant', 'user')
-            AND (
-              EXISTS (
-                SELECT 1
-                FROM user_house_access uha
-                JOIN houses h ON h.id = uha.house_id
-                WHERE uha.user_id = u.id AND h.owner_id = ?
-              )
-              OR EXISTS (
-                SELECT 1
-                FROM user_device_access uda
-                JOIN devices d ON d.id = uda.device_id
-                JOIN houses h ON h.id = d.house_id
-                WHERE uda.user_id = u.id AND h.owner_id = ?
-              )
-            )
-          ORDER BY u.name, u.email
-        `).bind(authUser.id, authUser.id).all();
+    const rows = await env.DB.prepare(`
+      SELECT id, email, name, role
+      FROM users
+      WHERE role = 'user'
+      ORDER BY name, email
+    `).all();
 
     return json({ users: rows.results || [] });
   } catch (error) {
@@ -665,6 +634,154 @@ export async function listProvisionableUsers(request, env, authUser) {
     return json({ error: 'Failed to fetch provisionable users' }, 500);
   }
 }
+
+export async function manageHouseAccess(
+  request,
+  env,
+  authUser,
+  houseId,
+  targetUserId = null
+) {
+  if (authUser.role !== 'admin' && authUser.role !== 'owner') {
+    return json({ error: 'Forbidden' }, 403);
+  }
+
+  const houseIdValidation = validateId(houseId);
+  if (!houseIdValidation.ok) {
+    return json({ error: 'Invalid house ID' }, 400);
+  }
+
+  try {
+    // Verify the house exists and enforce ownership for owners.
+    const house = await env.DB
+      .prepare('SELECT id, owner_id, name FROM houses WHERE id = ?')
+      .bind(houseIdValidation.value)
+      .first();
+
+    if (!house) {
+      return json({ error: 'House not found' }, 404);
+    }
+
+    if (
+      authUser.role === 'owner' &&
+      Number(house.owner_id) !== Number(authUser.id)
+    ) {
+      return json({ error: 'Forbidden' }, 403);
+    }
+
+    // GET: List regular users assigned to this house.
+    if (request.method === 'GET') {
+      const rows = await env.DB
+        .prepare(`
+          SELECT
+            u.id,
+            u.email,
+            u.name,
+            u.role,
+            uha.access_level,
+            uha.created_at AS assigned_at
+          FROM user_house_access uha
+          JOIN users u ON u.id = uha.user_id
+          WHERE uha.house_id = ?
+            AND u.role = 'user'
+          ORDER BY u.name, u.email
+        `)
+        .bind(houseIdValidation.value)
+        .all();
+
+      return json({
+        house: {
+          id: house.id,
+          name: house.name
+        },
+        users: rows.results || []
+      });
+    }
+
+    // POST: Assign a regular user to this house.
+    if (request.method === 'POST') {
+      const parsed = await parseJsonBody(request);
+      if (!parsed.ok) {
+        return json({ error: parsed.error }, 400);
+      }
+
+      const userIdValidation = validateId(parsed.data?.user_id);
+      if (!userIdValidation.ok) {
+        return json({ error: 'Valid user_id is required' }, 400);
+      }
+
+      const user = await env.DB
+        .prepare(`
+          SELECT id, email, name, role
+          FROM users
+          WHERE id = ? AND role = 'user'
+        `)
+        .bind(userIdValidation.value)
+        .first();
+
+      if (!user) {
+        return json({
+          error: 'User not found or account is not a regular user'
+        }, 404);
+      }
+
+      await env.DB
+        .prepare(`
+          INSERT OR IGNORE INTO user_house_access
+            (user_id, house_id, access_level, created_at)
+          VALUES (?, ?, 'viewer', ?)
+        `)
+        .bind(
+          user.id,
+          houseIdValidation.value,
+          new Date().toISOString()
+        )
+        .run();
+
+      return json({
+        success: true,
+        message: 'User assigned to house',
+        user
+      });
+    }
+
+    // DELETE: Remove only this user's access to this house.
+    // DELETE: Remove only this regular user's access to this house.
+if (request.method === 'DELETE') {
+  const userIdValidation = validateId(targetUserId);
+  if (!userIdValidation.ok) {
+    return json({ error: 'Invalid user ID' }, 400);
+  }
+
+  const result = await env.DB
+    .prepare(`
+      DELETE FROM user_house_access
+      WHERE user_id = ?
+        AND house_id = ?
+        AND user_id IN (
+          SELECT id FROM users WHERE role = 'user'
+        )
+    `)
+    .bind(
+      userIdValidation.value,
+      houseIdValidation.value
+    )
+    .run();
+
+  return json({
+    success: true,
+    removed: (result.meta?.changes ?? 0) > 0
+  });
+}
+
+    return json({ error: 'Method not allowed' }, 405);
+
+  } catch (error) {
+    console.error('Manage house access error:', error);
+    return json({ error: 'Failed to manage house access' }, 500);
+  }
+}
+
 
 async function isUserProvisionableToOwner(env, ownerId, userId) {
   const row = await env.DB.prepare(`
