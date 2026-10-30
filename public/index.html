@@ -1357,12 +1357,12 @@
     }
 
     function renderTenantList() {
-      const registrableHouses = state.houses;
+      const registrableHouses = state.houses || [];
       const houseOptions = registrableHouses.map(house => `
         <option value="${escapeHtml(house.id)}">${escapeHtml(house.name || `House ${house.id}`)}${house.location ? ` - ${escapeHtml(house.location)}` : ''}</option>
       `).join('');
-
-      const html = state.tenants.map(tenant => `
+      const isAdmin = state.role === 'admin';
+      const tenantCards = state.tenants.map(tenant => `
         <div class="tenant-card">
           <h3>${escapeHtml(tenant.name || tenant.email || 'Tenant')}</h3>
           <div class="meta">${escapeHtml(tenant.email || 'No email')}<br />Unit: ${escapeHtml(tenant.leased_unit || 'N/A')}<br />Rent: ${escapeHtml(tenant.rent_amount || 'N/A')}</div>
@@ -1371,107 +1371,135 @@
       `).join('');
 
       mainPanelContent.innerHTML = `
-        <form id="tenantRegistrationForm" class="tenant-registration-form">
-          <h3>Register a tenant</h3>
+        <form id="accountRegistrationForm" class="tenant-registration-form">
+          <h3>Register an account</h3>
           <div class="tenant-form-grid">
             <div class="field">
-              <label for="tenantName">Full name</label>
-              <input id="tenantName" name="name" type="text" maxlength="100" autocomplete="name" required />
+              <label for="accountRole">Account type</label>
+              <select id="accountRole" name="role" required>
+                ${isAdmin ? '<option value="owner">Owner</option>' : ''}
+                <option value="tenant">Tenant</option>
+                <option value="user">Regular user</option>
+              </select>
             </div>
             <div class="field">
-              <label for="tenantEmail">Email</label>
-              <input id="tenantEmail" name="email" type="email" autocomplete="email" required />
+              <label for="accountName">Full name</label>
+              <input id="accountName" name="name" type="text" maxlength="100" autocomplete="name" required />
             </div>
             <div class="field">
-              <label for="tenantHouse">House</label>
-              <select id="tenantHouse" name="house_id" required>
+              <label for="accountEmail">Email</label>
+              <input id="accountEmail" name="email" type="email" autocomplete="email" required />
+            </div>
+            <div class="field" id="accountHouseField">
+              <label for="accountHouse">Assign to house</label>
+              <select id="accountHouse" name="house_id" required>
                 <option value="">Select a house</option>
                 ${houseOptions || '<option value="" disabled>No houses available</option>'}
               </select>
             </div>
-            <div class="field">
-              <label for="tenantUnit">Leased unit</label>
-              <input id="tenantUnit" name="leased_unit" type="text" required />
+            <div class="field account-tenant-only">
+              <label for="accountUnit">Leased unit</label>
+              <input id="accountUnit" name="leased_unit" type="text" />
             </div>
-            <div class="field">
-              <label for="tenantRent">Rent amount</label>
-              <input id="tenantRent" name="rent_amount" type="number" min="0" step="0.01" required />
+            <div class="field account-tenant-only">
+              <label for="accountRent">Rent amount</label>
+              <input id="accountRent" name="rent_amount" type="number" min="0" step="0.01" />
             </div>
-            <div class="field">
-              <label for="tenantDeposit">Deposit</label>
-              <input id="tenantDeposit" name="deposit" type="number" min="0" step="0.01" value="0" required />
+            <div class="field account-tenant-only">
+              <label for="accountDeposit">Deposit</label>
+              <input id="accountDeposit" name="deposit" type="number" min="0" step="0.01" value="0" />
             </div>
-            <div class="field">
-              <label for="tenantBalance">Balance</label>
-              <input id="tenantBalance" name="balance" type="number" min="0" step="0.01" value="0" required />
+            <div class="field account-tenant-only">
+              <label for="accountBalance">Balance</label>
+              <input id="accountBalance" name="balance" type="number" min="0" step="0.01" value="0" />
             </div>
-            <div class="field">
-              <label for="tenantBillingCycle">Billing cycle</label>
-              <select id="tenantBillingCycle" name="billing_cycle" required>
-                <option value="monthly">Monthly</option>
-                <option value="weekly">Weekly</option>
-                <option value="biweekly">Biweekly</option>
+            <div class="field account-tenant-only">
+              <label for="accountBillingCycle">Billing cycle</label>
+              <select id="accountBillingCycle" name="billing_cycle">
+                <option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option>
               </select>
             </div>
-            <div class="field">
-              <label for="tenantOnboardDate">Move-in date</label>
-              <input id="tenantOnboardDate" name="onboard_date" type="date" value="${new Date().toISOString().slice(0, 10)}" required />
+            <div class="field account-tenant-only">
+              <label for="accountOnboardDate">Move-in date</label>
+              <input id="accountOnboardDate" name="onboard_date" type="date" value="${new Date().toISOString().slice(0, 10)}" />
             </div>
           </div>
-          <button class="primary-btn" type="submit" ${registrableHouses.length ? '' : 'disabled'}>Register tenant</button>
-          ${registrableHouses.length ? '' : '<p class="meta">Add a house you manage before registering a tenant.</p>'}
-          <div id="tenantRegistrationAlert" class="alert" role="status" aria-live="polite"></div>
+          <button class="primary-btn" type="submit" ${registrableHouses.length ? '' : 'disabled'}>Register account and assign</button>
+          ${registrableHouses.length ? '' : '<p class="meta">Add a house you manage before registering and assigning an account.</p>'}
+          <div id="accountRegistrationAlert" class="alert" role="status" aria-live="polite"></div>
         </form>
-        ${html ? `<div class="card-grid">${html}</div>` : '<div class="empty">No tenants assigned to this account scope.</div>'}
+        <h3>Current tenants</h3>
+        ${tenantCards ? `<div class="card-grid">${tenantCards}</div>` : '<div class="empty">No tenants registered in this account scope.</div>'}
       `;
 
-      document.getElementById('tenantRegistrationForm').addEventListener('submit', handleTenantRegistration);
+      const form = document.getElementById('accountRegistrationForm');
+      const roleSelect = document.getElementById('accountRole');
+      const tenantFields = [...form.querySelectorAll('.account-tenant-only')];
+      const syncRoleFields = () => {
+        const isTenant = roleSelect.value === 'tenant';
+        tenantFields.forEach(field => {
+          field.hidden = !isTenant;
+          field.querySelectorAll('input, select').forEach(input => input.required = isTenant);
+        });
+      };
+      roleSelect.addEventListener('change', syncRoleFields);
+      syncRoleFields();
+      form.addEventListener('submit', handleAccountRegistration);
     }
 
-    async function handleTenantRegistration(event) {
+    async function handleAccountRegistration(event) {
       event.preventDefault();
       const form = event.currentTarget;
-      const submitButton = form.querySelector('button[type="submit"]');
-      const formData = new FormData(form);
+      const button = form.querySelector('button[type="submit"]');
+      const alert = document.getElementById('accountRegistrationAlert');
+      const values = new FormData(form);
+      const role = String(values.get('role') || '').toLowerCase();
+      const houseId = Number(values.get('house_id'));
+      if (!houseId || !state.houses.some(h => Number(h.id) === houseId)) {
+        showAlert(alert, 'Select a valid house to assign this account.', 'error');
+        return;
+      }
       const payload = {
-        role: 'tenant',
-        name: formData.get('name'),
-        email: formData.get('email'),
-        house_id: Number(formData.get('house_id')),
-        leased_unit: formData.get('leased_unit'),
-        rent_amount: Number(formData.get('rent_amount')),
-        deposit: Number(formData.get('deposit')),
-        balance: Number(formData.get('balance')),
-        billing_cycle: formData.get('billing_cycle'),
-        onboard_date: formData.get('onboard_date')
+        role,
+        name: String(values.get('name') || '').trim(),
+        email: String(values.get('email') || '').trim()
       };
+      if (role === 'tenant') {
+        Object.assign(payload, {
+          house_id: houseId,
+          leased_unit: values.get('leased_unit'),
+          rent_amount: Number(values.get('rent_amount')),
+          deposit: Number(values.get('deposit')),
+          balance: Number(values.get('balance')),
+          billing_cycle: values.get('billing_cycle'),
+          onboard_date: values.get('onboard_date')
+        });
+      }
+      if (role === 'owner') {
+        showAlert(alert, 'Owner registration requires the Worker account-management endpoint. The current signup endpoint does not safely support assigning an owner to a house.', 'error');
+        return;
+      }
 
-      submitButton.disabled = true;
+      button.disabled = true;
       try {
-        const result = await requestJson(`${API_BASE}/api/signup`, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify(payload)
+        const created = await requestJson(`${API_BASE}/api/signup`, {
+          method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload)
         });
-
-        state.tenants.unshift({
-          name: payload.name,
-          email: payload.email,
-          leased_unit: payload.leased_unit,
-          rent_amount: payload.rent_amount
-        });
+        if (role === 'user') {
+          await requestJson(`${API_BASE}/api/houses/${houseId}/access`, {
+            method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ user_id: created.user?.id || created.id })
+          });
+        }
+        showAlert(alert, created.tempPassword
+          ? `${role === 'tenant' ? 'Tenant' : 'User'} registered and assigned. Temporary password: ${created.tempPassword}. They must change it after signing in.`
+          : `${role === 'tenant' ? 'Tenant' : 'User'} registered and assigned successfully.`, 'success');
+        if (role === 'tenant') state.tenants.unshift({ name: payload.name, email: payload.email, leased_unit: payload.leased_unit, rent_amount: payload.rent_amount });
+        await loadDashboardData();
         renderStats();
         renderMainPanel();
-        showAlert(
-          document.getElementById('tenantRegistrationAlert'),
-          result.tempPassword
-            ? `Tenant registered. Share this temporary password securely: ${result.tempPassword}. They must change it after signing in.`
-            : result.message || 'Tenant registered successfully.',
-          'success'
-        );
       } catch (error) {
-        showAlert(document.getElementById('tenantRegistrationAlert'), error.message || 'Tenant registration failed.', 'error');
-        submitButton.disabled = false;
+        showAlert(alert, error.message || 'Account registration failed.', 'error');
+        button.disabled = false;
       }
     }
 
