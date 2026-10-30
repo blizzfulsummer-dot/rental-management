@@ -5,7 +5,8 @@ export function validateEmail(value) {
 
   const normalized = value.trim().toLowerCase();
   const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
-
+  
+    
   return {
     ok: isValid,
     errors: isValid ? [] : ['email']
@@ -31,16 +32,24 @@ export function validatePassword(value) {
 }
 
 export function validateNumber(value, fieldName, allowNegative = false) {
-  if (value === undefined || value === null) {
+  if (
+    value === undefined ||
+    value === null ||
+    (typeof value === 'string' && value.trim() === '')
+  ) {
     return { ok: false, error: `${fieldName} is required` };
   }
+
   const num = Number(value);
-  if (Number.isNaN(num)) {
+
+  if (!Number.isFinite(num)) {
     return { ok: false, error: `${fieldName} must be a valid number` };
   }
+
   if (!allowNegative && num < 0) {
     return { ok: false, error: `${fieldName} cannot be negative` };
   }
+
   return { ok: true, value: num };
 }
 

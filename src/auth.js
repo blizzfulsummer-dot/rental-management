@@ -14,6 +14,12 @@ export async function signup(request, env) {
   const normalizedEmail = String(payload.email).trim().toLowerCase();
   const role = String(payload.role).trim().toLowerCase();
 
+  if (role === 'owner') {
+  return json({
+    error: 'Owner accounts must be created by an administrator'
+  }, 403);
+}
+
   let sanitizedName = null;
   if (payload.name) {
     const nameResult = sanitizeString(payload.name, 'name', 100);
@@ -130,10 +136,10 @@ export async function signup(request, env) {
     }
 
     if (role === 'admin') {
-      const registrationCode = await env.DB.prepare('SELECT id FROM signup_keys WHERE code = ? AND used = 0').bind(payload.code).first();
-      if (!registrationCode) return json({ error: 'Invalid code' }, 400);
-      await env.DB.prepare('UPDATE signup_keys SET used = 1, user_id = ? WHERE id = ?').bind(userId, registrationCode.id).run();
-    }
+  await env.DB.prepare(
+    'UPDATE signup_keys SET used = 1, user_id = ? WHERE id = ?'
+  ).bind(userId, registrationCode.id).run();
+}
 
     return json({ success: true, message: 'User registered successfully', tempPassword });
   } catch (error) {
@@ -141,6 +147,200 @@ export async function signup(request, env) {
     return json({ error: 'Failed to create user', details: error.message }, 500);
   }
 }
+
+
+export async function registerProvisionedAccount(request, env, authUser) {
+  if (!authUser?.id || !['admin', 'owner'].includes(String(authUser.role).toLowerCase())) {
+    return json({ error: 'You are not authorized to register accounts' }, 403);
+  }
+
+  const parsed = await parseJsonBody(request);
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+
+  const payload = parsed.data || {};
+  const creatorRole = String(authUser.role).toLowerCase();
+  const role = String(payload.role || '').trim().toLowerCase();
+
+  if (!['user', 'tenant', 'owner'].includes(role)) {
+    return json({ error: 'Invalid account role' }, 400);
+  }
+
+  if (role === 'owner' && creatorRole !== 'admin') {
+    return json({ error: 'Only admins can register owners' }, 403);
+  }
+
+  const nameResult = sanitizeString(payload.name, 'name', 100);
+  if (!nameResult.ok) {
+    return json({ error: nameResult.error }, 400);
+  }
+
+  const emailResult = validateEmail(payload.email);
+  if (!emailResult.ok) {
+    return json({ error: 'Invalid email address' }, 400);
+  }
+
+  const normalizedEmail = String(payload.email).trim().toLowerCase();
+  let tenantHouseId = null;
+
+  if (role === 'tenant') {
+    const tenantValidation = validateTenantPayload(payload);
+
+    if (!tenantValidation.ok) {
+      return json({
+        error: 'Invalid tenant information',
+        details: tenantValidation.errors
+      }, 400);
+    }
+
+    const houseValidation = validateId(payload.house_id);
+
+    if (!houseValidation.ok) {
+      return json({ error: 'A valid house is required for tenant registration' }, 400);
+    }
+
+    tenantHouseId = houseValidation.value;
+
+    const onboardDate = new Date(payload.onboard_date);
+    if (Number.isNaN(onboardDate.getTime())) {
+      return json({ error: 'Invalid tenant move-in date' }, 400);
+    }
+
+    const house = creatorRole === 'owner'
+      ? await env.DB.prepare(
+          'SELECT id FROM houses WHERE id = ? AND owner_id = ?'
+        ).bind(tenantHouseId, authUser.id).first()
+      : await env.DB.prepare(
+          'SELECT id FROM houses WHERE id = ?'
+        ).bind(tenantHouseId).first();
+
+    if (!house) {
+      return json({
+        error: creatorRole === 'owner'
+          ? 'You can only register tenants for houses you own'
+          : 'House not found'
+      }, creatorRole === 'owner' ? 403 : 404);
+    }
+  }
+
+  let createdUserId = null;
+
+  try {
+    const existing = await env.DB.prepare(
+      'SELECT id FROM users WHERE email = ?'
+    ).bind(normalizedEmail).first();
+
+    if (existing) {
+      return json({ error: 'Email already exists' }, 409);
+    }
+
+    const tempPassword = generateTempPassword();
+    const { hash, salt } = await hashPBKDF2(tempPassword);
+
+    const now = new Date().toISOString();
+    const expiration = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    const userInsert = await env.DB.prepare(`
+      INSERT INTO users (
+        email,
+        password_hash,
+        password_salt,
+        role,
+        created_at,
+        name,
+        requires_change_password,
+        temp_password_expiration
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+    `).bind(
+      normalizedEmail,
+      arrayBufferToHex(hash),
+      arrayBufferToHex(salt),
+      role,
+      now,
+      nameResult.value,
+      expiration
+    ).run();
+
+    createdUserId = userInsert.meta?.last_row_id;
+
+    if (!createdUserId) {
+      throw new Error('Could not retrieve the newly created user ID');
+    }
+
+    if (role === 'tenant') {
+      await env.DB.prepare(`
+        INSERT INTO tenants (
+          user_id,
+          balance,
+          deposit,
+          rent_amount,
+          billing_cycle,
+          leased_unit,
+          onboard_date,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        createdUserId,
+        Number(payload.balance),
+        Number(payload.deposit),
+        Number(payload.rent_amount),
+        String(payload.billing_cycle).trim(),
+        String(payload.leased_unit).trim(),
+        new Date(payload.onboard_date).toISOString(),
+        now
+      ).run();
+
+      // Both admins and owners must create the tenant's house access.
+      await env.DB.prepare(`
+        INSERT INTO user_house_access (
+          user_id,
+          house_id,
+          access_level,
+          created_at
+        )
+        VALUES (?, ?, 'tenant', ?)
+      `).bind(createdUserId, tenantHouseId, now).run();
+    }
+
+    return json({
+      success: true,
+      message: `${role.charAt(0).toUpperCase() + role.slice(1)} account registered successfully`,
+      user: {
+        id: createdUserId,
+        name: nameResult.value,
+        email: normalizedEmail,
+        role
+      },
+      tempPassword
+    });
+
+  } catch (error) {
+    console.error('Account provisioning error:', error);
+
+    // Remove partial records if tenant creation or access assignment failed.
+    if (createdUserId) {
+      try {
+        await env.DB.prepare(
+          'DELETE FROM user_house_access WHERE user_id = ?'
+        ).bind(createdUserId).run();
+
+        await env.DB.prepare(
+          'DELETE FROM tenants WHERE user_id = ?'
+        ).bind(createdUserId).run();
+
+        await env.DB.prepare(
+          'DELETE FROM users WHERE id = ?'
+        ).bind(createdUserId).run();
+      } catch (cleanupError) {
+        console.error('Provisioning cleanup error:', cleanupError);
+      }
+    }
+
+    return json({ error: 'Failed to register account' }, 500);
+  }
+}
+
 
 export async function login(request, env) {
   const parsed = await parseJsonBody(request);

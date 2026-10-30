@@ -917,7 +917,7 @@
     function resolveApiBase() {
       const host = window.location.hostname;
       const origin = window.location.origin;
-      const cloudApi = 'https://api.ehexibit.com';
+      const cloudApi = 'https://reman.ehexibit.com';
       const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
 
       // Opening this HTML directly (file://) gives the page an opaque "null" origin.
@@ -1145,7 +1145,7 @@
         ['Name', profile.name || 'Not provided'],
         ['Email', profile.email || 'Not provided'],
         ['Role', formatRole(state.role)],
-        ['Property', assignedHouse ? assignedHouse.name : 'No assigned property'],
+        ['House', assignedHouse ? assignedHouse.name : 'No assigned house'],
         ['Location', assignedHouse ? (assignedHouse.location || 'N/A') : 'N/A']
       ];
 
@@ -1322,10 +1322,25 @@
         return Number(device.house_id) === Number(selectedHouseId);
       });
 
+      const canControlRelays = ['admin', 'owner'].includes(
+    String(state.role || '').toLowerCase()
+);
+
       const cards = visibleDevices.map(device => `
         ${(() => {
+
+          const role = String(state.role || '').toLowerCase();
+          const isPrivilegedRole = ['admin', 'owner'].includes(role);
+          
           const enrollments = state.fingerprints[device.id] || [];
           const mine = enrollments.find(item => Number(item.user_id) === Number(state.profile?.id));
+
+          const hideManualUnlock =
+    !isPrivilegedRole &&
+    ['user', 'tenant'].includes(role) &&
+    mine?.status === 'active' &&
+    !mine.enrollment_pending;
+    
           const deviceUsers = state.deviceAccess[device.id] || [];
           const deviceUserIds = new Set(deviceUsers.map(user => Number(user.id)));
           const availableUsers = state.provisionableUsers.filter(user => !deviceUserIds.has(Number(user.id)));
@@ -1348,10 +1363,25 @@
           <div class="device-card-divider"></div>
           <div class="device-section-label">QUICK CONTROLS</div>
           <div class="inline-actions">
-            <button class="mini-btn" type="button" data-device-command="door.unlock" data-device-id="${device.id}">Unlock door (5 sec)</button>
-            <button class="mini-btn" type="button" data-device-command="door.lock" data-device-id="${device.id}">Lock door</button>
+            
+${hideManualUnlock ? '' : `
+    <button
+        class="mini-btn"
+        type="button"
+        data-device-command="door.unlock"
+        data-device-id="${device.id}">
+        Unlock door
+    </button>
+`}
+
+${canControlRelays ? `
+    <!-- Keep your existing relay buttons here -->
+    <button class="mini-btn" type="button" data-device-command="door.lock" data-device-id="${device.id}">Lock door</button>
             <button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="true" data-device-id="${device.id}">Relay 2 on</button>
             <button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="false" data-device-id="${device.id}">Relay 2 off</button>
+` : ''}
+
+            
           </div>
           <div class="device-edit-form">
             <strong>Fingerprint access</strong>
@@ -1894,7 +1924,7 @@
       }
 
       if (state.activeView === 'houses') {
-        mainPanelTitle.textContent = role === 'admin' ? 'All Houses' : role === 'owner' ? 'My Houses' : 'Assigned Properties';
+        mainPanelTitle.textContent = role === 'admin' ? 'All Properties' : role === 'owner' ? 'My Properties' : 'Assigned Properties';
         renderHouseList();
         return;
       }
