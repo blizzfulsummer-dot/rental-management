@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rental Management Portal</title>
+  <title>ReMan | Smart Property Management</title>
   <style>
     :root {
       --bg: #eef4ff;
@@ -762,6 +762,28 @@
     .status-dot { width:6px;height:6px;border-radius:50%;background:currentColor; }
     .device-status.online { background:#ecfdf3;color:#15803d; }
     .device-status.offline { background:#f1f5f9;color:#64748b; }
+    .brand-subtitle { display:inline-block;margin-left:9px;color:#94a3b8;font-size:11px;font-weight:650;letter-spacing:.02em;vertical-align:middle; }
+    .access-toolbar { display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px; }
+    .access-summary { display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px; }
+    .access-count { display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border-radius:9px;background:#eef2ff;color:#4338ca;font-weight:850; }
+    .access-add-panel { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;margin:0 0 18px;padding:16px;border:1px solid #e2e8f0;border-radius:15px;background:#f8fafc; }
+    .access-add-panel .field { margin:0; }
+    .access-add-panel select,.access-search { width:100%;min-height:44px;padding:10px 12px;border:1px solid #d8e1ef;border-radius:11px;background:#fff;color:var(--text); }
+    .access-user-list { display:grid;gap:10px; }
+    .access-user-row { display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 15px;border:1px solid #e8ecf3;border-radius:14px;background:#fff; }
+    .access-user-main { display:flex;align-items:center;gap:12px;min-width:0; }
+    .access-avatar { display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:13px;background:#eef2ff;color:#4338ca;font-weight:850; }
+    .access-user-name { min-width:0; }
+    .access-user-name strong,.access-user-name span { display:block;overflow-wrap:anywhere; }
+    .access-user-name span { color:var(--muted);font-size:12px;margin-top:2px; }
+    .access-row-actions { display:flex;align-items:center;gap:10px;flex:0 0 auto; }
+    .access-level { display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.05em; }
+    .access-empty { padding:24px;border:1px dashed #cbd5e1;border-radius:14px;text-align:center;color:var(--muted);background:#fafbff; }
+    .access-house-heading { margin:0 0 5px;font-size:19px;letter-spacing:-.025em; }
+    .access-house-subtitle { margin:0;color:var(--muted);font-size:13px; }
+    .access-toolbar .house-selector { margin:0; }
+    .access-toolbar .house-selector select { min-width:220px; }
+    @media(max-width:560px) { .brand-subtitle { display:block;margin:2px 0 0; } .access-add-panel { grid-template-columns:minmax(0,1fr); } .access-add-panel .primary-btn { width:100%; } .access-user-row { align-items:flex-start;flex-wrap:wrap; } .access-row-actions { width:100%;justify-content:space-between;padding-left:52px; } }
     @media(max-width:560px) { .device-card-head { padding:16px 14px 14px;gap:10px;flex-wrap:wrap; } .device-icon-tile { width:42px;height:42px;flex-basis:42px; } .device-card-title { min-width:calc(100% - 64px); } .device-status { margin-left:52px; } .device-card-divider { margin:0 14px; } .device-section-label { padding:13px 14px 0; } .device-card-modern > .inline-actions { padding:10px 14px 14px; } }
 
 
@@ -790,7 +812,7 @@
   <div id="loginScreen" class="screen active">
     <div class="login-shell">
       <div class="login-card">
-        <p class="eyebrow">Rental Manangement Solution</p>
+        <p class="eyebrow">SMART PROPERTY MANAGEMENT</p>
         <h1>Welcome Home!</h1>
         <!--p class="subtle">Manage y</p-->
 
@@ -818,7 +840,7 @@
 
   <div id="dashboardScreen" class="screen">
     <header class="topbar">
-      <div class="brand">Rental Management Portal</div>
+      <div class="brand">ReMan <span class="brand-subtitle">Property &amp; Smart Access</span></div>
       <div class="user-meta">
         <span id="userRole" class="role-pill">Role</span>
         <strong id="userDisplayName">User</strong>
@@ -933,7 +955,7 @@
       }
 
       // Local static preview and the deployed ReMan portal use the Cloudflare API.
-      if (isLocalHost || host === 'rental-management.ehexibit.com') {
+      if (isLocalHost || host === 'reman.ehexibit.com') {
         return cloudApi;
       }
 
@@ -1005,7 +1027,7 @@
 
     function getRoleViews() {
       if (state.role === 'admin' || state.role === 'owner') {
-        return ['overview', 'property', 'tenants', 'devices'];
+        return ['overview', 'property', 'access', 'tenants', 'devices'];
       }
       return ['overview', 'property', 'devices'];
     }
@@ -1014,7 +1036,8 @@
       const views = getRoleViews();
       const labels = {
         overview: 'Overview',
-        property: 'Property',
+        property: 'Properties',
+        access: 'House Access',
         tenants: 'Tenants',
         devices: 'Devices'
       };
@@ -1078,7 +1101,12 @@
         }
       }
       if (!response.ok) {
-        const error = new Error(data.error || data.message || 'Request failed');
+        const detailText = Array.isArray(data.details) && data.details.length
+          ? `: ${data.details.map(item => typeof item === 'string' ? item : (item.message || item.field || JSON.stringify(item))).join('; ')}`
+          : '';
+        const error = new Error(`${data.error || data.message || `Request failed (${response.status})`}${detailText}`);
+        error.status = response.status;
+        error.details = data.details || null;
         error.code = data.code || data.errorCode || '';
         error.emailActive = data.emailActive === true || data.email_active === true;
         throw error;
@@ -1125,7 +1153,7 @@
       }
 
       statsGrid.innerHTML = cards.map(card => {
-        const target = /house/i.test(card.label) ? 'houses' : /tenant/i.test(card.label) ? 'tenants' : /device/i.test(card.label) ? 'devices' : 'overview';
+        const target = /house|propert/i.test(card.label) ? 'property' : /tenant/i.test(card.label) ? 'tenants' : /device/i.test(card.label) ? 'devices' : 'overview';
         const safeTarget = getRoleViews().includes(target) ? target : 'overview';
         return `
           <button type="button" class="stat-card stat-card-link" data-navigate-view="${safeTarget}" aria-label="Open ${escapeHtml(card.label)} section">
@@ -1168,7 +1196,11 @@
           <div class="house-card-top"><span class="tag">House</span><span class="card-arrow" aria-hidden="true">↗</span></div>
           <h3>${escapeHtml(house.name || 'Unnamed House')}</h3>
           <div class="meta">${escapeHtml(house.location || 'No location')}<br /><br />ID: ${escapeHtml(house.house_uid || 'N/A')}</div>
-          <div class="house-card-footer"><span>Manage connected devices</span><span aria-hidden="true">→</span></div>
+          <div class="inline-actions">
+            <button class="mini-btn" type="button" data-house-action="devices" data-house-id="${house.id}">View Devices</button>
+            <button class="mini-btn" type="button" data-house-action="access" data-house-id="${house.id}">Manage Access</button>
+          </div>
+          <div class="house-card-footer"><span>Property management</span><span aria-hidden="true">→</span></div>
         </article>
       `).join('');
 
@@ -1186,6 +1218,141 @@
         card.addEventListener('keydown', event => {
           if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openHouse(card); }
         });
+      });
+      mainPanelContent.querySelectorAll('[data-house-action]').forEach(button => {
+        button.addEventListener('click', event => {
+          event.stopPropagation();
+          state.selectedHouseId = Number(button.dataset.houseId);
+          navigateToView(button.dataset.houseAction === 'access' ? 'access' : 'devices');
+        });
+      });
+    }
+
+    async function renderHouseAccess() {
+      if (state.role !== 'admin' && state.role !== 'owner') {
+        mainPanelContent.innerHTML = '<div class="empty">You do not have permission to manage house access.</div>';
+        return;
+      }
+      if (!state.houses.length) {
+        mainPanelContent.innerHTML = '<div class="empty">Create or select a house before assigning users.</div>';
+        return;
+      }
+
+      const selectedHouse = state.houses.find(house => Number(house.id) === Number(state.selectedHouseId)) || state.houses[0];
+      state.selectedHouseId = Number(selectedHouse.id);
+      const houseOptions = state.houses.map(house => `<option value="${escapeHtml(house.id)}" ${Number(house.id) === Number(selectedHouse.id) ? 'selected' : ''}>${escapeHtml(house.name || `House ${house.id}`)}</option>`).join('');
+      mainPanelContent.innerHTML = `
+        <div class="access-toolbar">
+          <div><h3 class="access-house-heading">${escapeHtml(selectedHouse.name || `House ${selectedHouse.id}`)}</h3><p class="access-house-subtitle">Manage regular users who can access this property</p></div>
+          <label class="house-selector" for="accessHouseSelect">House <select id="accessHouseSelect">${houseOptions}</select></label>
+        </div>
+        <div id="houseAccessAlert" class="alert" role="status" aria-live="polite"></div>
+        <form id="houseAccessAddForm" class="access-add-panel">
+          <div class="field"><label for="houseAccessUserSearch">Find a user</label><input id="houseAccessUserSearch" type="search" placeholder="Search by name or email…" autocomplete="off" /></div>
+          <div class="field"><label for="houseAccessUser">Assign a regular user</label><select id="houseAccessUser" name="user_id" required><option value="">Choose a user to add</option></select></div>
+          <button class="primary-btn" type="submit">Add to house</button>
+        </form>
+        <div class="access-toolbar"><div class="access-summary"><span class="access-count" id="houseAccessCount">—</span><span>Users with access to this house</span></div><input id="houseAccessSearch" class="access-search" type="search" placeholder="Search assigned users…" aria-label="Search assigned users" style="max-width:280px" /></div>
+        <div id="houseAccessUsers" class="access-user-list"><div class="data-loading"><span class="loading-spinner"></span>Loading house access…</div></div>
+      `;
+
+      document.getElementById('accessHouseSelect').addEventListener('change', event => {
+        state.selectedHouseId = Number(event.target.value);
+        renderMainPanel();
+      });
+
+      const alert = document.getElementById('houseAccessAlert');
+      const userSelect = document.getElementById('houseAccessUser');
+      const userSearchInput = document.getElementById('houseAccessUserSearch');
+      const usersContainer = document.getElementById('houseAccessUsers');
+      const searchInput = document.getElementById('houseAccessSearch');
+      let assignedUsers = [];
+
+      const renderAssignedUsers = () => {
+        const term = searchInput.value.trim().toLowerCase();
+        const filtered = assignedUsers.filter(user => `${user.name || ''} ${user.email || ''}`.toLowerCase().includes(term));
+        document.getElementById('houseAccessCount').textContent = String(assignedUsers.length);
+        if (!filtered.length) {
+          usersContainer.innerHTML = `<div class="access-empty">${assignedUsers.length ? 'No assigned users match your search.' : 'No regular users have been assigned to this house yet.'}</div>`;
+          return;
+        }
+        usersContainer.innerHTML = filtered.map(user => {
+          const displayName = user.name || user.email || `User ${user.id}`;
+          const initials = displayName.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+          return `<div class="access-user-row"><div class="access-user-main"><div class="access-avatar" aria-hidden="true">${escapeHtml(initials || 'U')}</div><div class="access-user-name"><strong>${escapeHtml(displayName)}</strong><span>${escapeHtml(user.email || 'No email')}</span></div></div><div class="access-row-actions"><span class="access-level">${escapeHtml(user.access_level || 'viewer')}</span><button class="mini-btn danger" type="button" data-remove-house-user="${escapeHtml(user.id)}">Remove</button></div></div>`;
+        }).join('');
+        usersContainer.querySelectorAll('[data-remove-house-user]').forEach(button => {
+          button.addEventListener('click', async () => {
+            const userId = Number(button.dataset.removeHouseUser);
+            const user = assignedUsers.find(item => Number(item.id) === userId);
+            if (!user || !window.confirm(`Remove ${user.name || user.email || 'this user'} from ${selectedHouse.name || 'this house'}?`)) return;
+            button.disabled = true;
+            try {
+              await requestJson(`${API_BASE}/api/houses/${selectedHouse.id}/access/${userId}`, { method: 'DELETE', headers: getAuthHeaders() });
+              assignedUsers = assignedUsers.filter(item => Number(item.id) !== userId);
+              renderAssignedUsers();
+              refreshUserOptions();
+              if (window.remanUX?.showToast) window.remanUX.showToast('House access removed.');
+            } catch (error) {
+              button.disabled = false;
+              showAlert(alert, error.message || 'Unable to remove house access.', 'error');
+            }
+          });
+        });
+      };
+      const availableUsers = () => {
+        const assignedIds = new Set(assignedUsers.map(user => Number(user.id)));
+        const term = userSearchInput.value.trim().toLowerCase();
+        return state.provisionableUsers.filter(user => {
+          const matchesRole = String(user.role).toLowerCase() === 'user';
+          const notAssigned = !assignedIds.has(Number(user.id));
+          const matchesSearch = `${user.name || ''} ${user.email || ''}`.toLowerCase().includes(term);
+          return matchesRole && notAssigned && matchesSearch;
+        });
+      };
+      const refreshUserOptions = () => {
+        const available = availableUsers();
+        userSelect.innerHTML = available.length
+          ? '<option value="">Choose a user to add</option>' + available.map(user => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || user.email)}${user.email && user.name ? ` — ${escapeHtml(user.email)}` : ''}</option>`).join('')
+          : '<option value="">No matching unassigned users</option>';
+        userSelect.disabled = !available.length;
+        document.querySelector('#houseAccessAddForm button[type="submit"]').disabled = !available.length;
+      };
+
+      try {
+        const result = await requestJson(`${API_BASE}/api/houses/${selectedHouse.id}/access`, { headers: getAuthHeaders() });
+        assignedUsers = Array.isArray(result.users) ? result.users : [];
+        refreshUserOptions();
+        renderAssignedUsers();
+      } catch (error) {
+        usersContainer.innerHTML = `<div class="access-empty">Unable to load house access: ${escapeHtml(error.message || 'Request failed')}</div>`;
+        document.querySelector('#houseAccessAddForm button[type="submit"]').disabled = true;
+      }
+
+      searchInput.addEventListener('input', renderAssignedUsers);
+      userSearchInput.addEventListener('input', refreshUserOptions);
+      document.getElementById('houseAccessAddForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        const userId = Number(userSelect.value);
+        if (!userId) return;
+        const button = event.currentTarget.querySelector('button[type="submit"]');
+        setButtonBusy(button, true, 'Adding…');
+        try {
+          await requestJson(`${API_BASE}/api/houses/${selectedHouse.id}/access`, {
+            method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ user_id: userId })
+          });
+          const added = state.provisionableUsers.find(user => Number(user.id) === userId);
+          if (added && !assignedUsers.some(user => Number(user.id) === userId)) assignedUsers.push({ ...added, access_level: 'viewer' });
+          userSelect.value = '';
+          refreshUserOptions();
+          renderAssignedUsers();
+          if (window.remanUX?.showToast) window.remanUX.showToast('User assigned to house.');
+        } catch (error) {
+          showAlert(alert, error.message || 'Unable to assign user to house.', 'error');
+        } finally {
+          setButtonBusy(button, false);
+          button.disabled = !availableUsers().length;
+        }
       });
     }
 
@@ -1322,25 +1489,10 @@
         return Number(device.house_id) === Number(selectedHouseId);
       });
 
-      const canControlRelays = ['admin', 'owner'].includes(
-    String(state.role || '').toLowerCase()
-);
-
       const cards = visibleDevices.map(device => `
         ${(() => {
-
-          const role = String(state.role || '').toLowerCase();
-          const isPrivilegedRole = ['admin', 'owner'].includes(role);
-          
           const enrollments = state.fingerprints[device.id] || [];
           const mine = enrollments.find(item => Number(item.user_id) === Number(state.profile?.id));
-
-          const hideManualUnlock =
-    !isPrivilegedRole &&
-    ['user', 'tenant'].includes(role) &&
-    mine?.status === 'active' &&
-    !mine.enrollment_pending;
-    
           const deviceUsers = state.deviceAccess[device.id] || [];
           const deviceUserIds = new Set(deviceUsers.map(user => Number(user.id)));
           const availableUsers = state.provisionableUsers.filter(user => !deviceUserIds.has(Number(user.id)));
@@ -1363,25 +1515,10 @@
           <div class="device-card-divider"></div>
           <div class="device-section-label">QUICK CONTROLS</div>
           <div class="inline-actions">
-            
-${hideManualUnlock ? '' : `
-    <button
-        class="mini-btn"
-        type="button"
-        data-device-command="door.unlock"
-        data-device-id="${device.id}">
-        Unlock door
-    </button>
-`}
-
-${canControlRelays ? `
-    <!-- Keep your existing relay buttons here -->
-    <button class="mini-btn" type="button" data-device-command="door.lock" data-device-id="${device.id}">Lock door</button>
+            <button class="mini-btn" type="button" data-device-command="door.unlock" data-device-id="${device.id}">Unlock door (5 sec)</button>
+            <button class="mini-btn" type="button" data-device-command="door.lock" data-device-id="${device.id}">Lock door</button>
             <button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="true" data-device-id="${device.id}">Relay 2 on</button>
             <button class="mini-btn" type="button" data-device-command="io.set" data-control-id="relay2" data-control-state="false" data-device-id="${device.id}">Relay 2 off</button>
-` : ''}
-
-            
           </div>
           <div class="device-edit-form">
             <strong>Fingerprint access</strong>
@@ -1894,7 +2031,8 @@ ${canControlRelays ? `
           <h3>${house.name || 'Assigned House'}</h3>
           <div class="meta">${escapeHtml(house.location || 'No location')}<br />Owner: ${escapeHtml(house.owner_id || 'N/A')}</div>
           <div class="inline-actions">
-            <button class="mini-btn" data-house-id="${house.id}" data-action="select-house">View Devices</button>
+            <button class="mini-btn" type="button" data-house-id="${house.id}" data-action="select-house">View Devices</button>
+            <button class="mini-btn" type="button" data-house-id="${house.id}" data-action="select-access">Manage Access</button>
           </div>
         </div>
       `).join('');
@@ -1913,6 +2051,13 @@ ${canControlRelays ? `
           if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openHouse(card); }
         });
       });
+      mainPanelContent.querySelectorAll('[data-action="select-house"], [data-action="select-access"]').forEach(button => {
+        button.addEventListener('click', event => {
+          event.stopPropagation();
+          state.selectedHouseId = Number(button.dataset.houseId);
+          navigateToView(button.dataset.action === 'select-access' ? 'access' : 'devices');
+        });
+      });
     }
 
     function renderMainPanel() {
@@ -1923,9 +2068,15 @@ ${canControlRelays ? `
         state.activeView = 'overview';
       }
 
-      if (state.activeView === 'houses') {
+      if (state.activeView === 'property' || state.activeView === 'houses') {
         mainPanelTitle.textContent = role === 'admin' ? 'All Properties' : role === 'owner' ? 'My Properties' : 'Assigned Properties';
         renderHouseList();
+        return;
+      }
+
+      if (state.activeView === 'access') {
+        mainPanelTitle.textContent = 'House Access';
+        void renderHouseAccess();
         return;
       }
 
