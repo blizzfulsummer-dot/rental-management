@@ -19,7 +19,7 @@ import {
   updateHouse,
   updateTenant
 } from './tenant.js';
-import { getAuthUser, login, refreshToken, requestReset, resetPassword, signup, updatePassword, verifyJwt, registerProvisionedAccount } from './auth.js';
+import { getAuthUser, login, refreshToken, requestReset, resetPassword, signup, updatePassword, verifyJwt, registerProvisionedAccount,listManagedAccounts, updateManagedAccount } from './auth.js';
 import { createRateLimiter } from './lib/rateLimit.js';
 import { issueDeviceWebSocketTicket, issueWebSocketTicket, validateWebSocketTicket } from './lib/websocketTicket.js';
 import { HouseRoom } from './houseRoom.js';
@@ -255,6 +255,18 @@ export default {
 
       if (url.pathname === '/api/provisioning/users' && request.method === 'GET') {
         return withCors(await listProvisionableUsers(request, env, authUser.user), allowOrigin);
+      }
+
+      if (url.pathname === '/api/accounts' && request.method === 'GET') {
+        return withCors(await listManagedAccounts(request, env, authUser.user), allowOrigin);
+      }
+
+      const accountMatch = url.pathname.match(/^\/api\/accounts\/(\d+)$/);
+      if (accountMatch && request.method === 'PUT') {
+        return withCors(
+          await updateManagedAccount(request, env, authUser.user, accountMatch[1]),
+          allowOrigin
+        );
       }
 
       if (url.pathname === '/api/houses' && request.method === 'POST') {

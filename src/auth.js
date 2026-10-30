@@ -222,6 +222,24 @@ export async function registerProvisionedAccount(request, env, authUser) {
     }
   }
 
+   let provisionedHouseIds = [];
+  if (role === 'user') {
+    provisionedHouseIds = Array.isArray(payload.house_ids)
+      ? [...new Set(payload.house_ids.map(Number))]
+      : (payload.house_id ? [Number(payload.house_id)] : []);
+    if (!provisionedHouseIds.length || provisionedHouseIds.some(id => !Number.isSafeInteger(id) || id <= 0)) {
+      return json({ error: 'At least one valid property is required for a regular user' }, 400);
+    }
+    for (const houseId of provisionedHouseIds) {
+      const house = creatorRole === 'owner'
+        ? await env.DB.prepare('SELECT id FROM houses WHERE id = ? AND owner_id = ?').bind(houseId, authUser.id).first()
+        : await env.DB.prepare('SELECT id FROM houses WHERE id = ?').bind(houseId).first();
+      if (!house) return json({ error: creatorRole === 'owner'
+        ? 'You can only assign users to properties you own'
+        : 'Property not found' }, creatorRole === 'owner' ? 403 : 404);
+    }
+  }
+
   let createdUserId = null;
 
   try {
@@ -303,6 +321,15 @@ export async function registerProvisionedAccount(request, env, authUser) {
       `).bind(createdUserId, tenantHouseId, now).run();
     }
 
+    if (role === 'user') {
+      for (const houseId of provisionedHouseIds) {
+        await env.DB.prepare(`
+          INSERT OR IGNORE INTO user_house_access (user_id, house_id, access_level, created_at)
+          VALUES (?, ?, 'viewer', ?)
+        `).bind(createdUserId, houseId, now).run();
+      }
+    }
+
     return json({
       success: true,
       message: `${role.charAt(0).toUpperCase() + role.slice(1)} account registered successfully`,
@@ -340,6 +367,186 @@ export async function registerProvisionedAccount(request, env, authUser) {
     return json({ error: 'Failed to register account' }, 500);
   }
 }
+
+export async function listManagedAccounts(request, env, authUser) {
+  const actorRole = String(authUser?.role || '').toLowerCase();
+  if (!['admin', 'owner'].includes(actorRole)) {
+    return json({ error: 'Forbidden' }, 403);
+  }
+
+  try {
+    const rows = actorRole === 'admin'
+      ? await env.DB.prepare(`
+          SELECT u.id, u.name, u.email, u.role,
+                 t.id AS tenant_id, t.balance, t.deposit, t.rent_amount,
+                 t.billing_cycle, t.leased_unit, t.onboard_date
+          FROM users u
+          LEFT JOIN tenants t ON t.user_id = u.id
+          WHERE u.role IN ('owner', 'tenant', 'user')
+          ORDER BY CASE u.role WHEN 'owner' THEN 0 WHEN 'tenant' THEN 1 ELSE 2 END,
+                   COALESCE(u.name, u.email)
+        `).all()
+      : await env.DB.prepare(`
+          SELECT DISTINCT u.id, u.name, u.email, u.role,
+                 t.id AS tenant_id, t.balance, t.deposit, t.rent_amount,
+                 t.billing_cycle, t.leased_unit, t.onboard_date
+          FROM users u
+          LEFT JOIN tenants t ON t.user_id = u.id
+          WHERE u.role IN ('tenant', 'user')
+            AND (
+              EXISTS (
+                SELECT 1 FROM user_house_access uha
+                JOIN houses h ON h.id = uha.house_id
+                WHERE uha.user_id = u.id AND h.owner_id = ?
+              ) OR EXISTS (
+                SELECT 1 FROM user_device_access uda
+                JOIN devices d ON d.id = uda.device_id
+                JOIN houses h ON h.id = d.house_id
+                WHERE uda.user_id = u.id AND h.owner_id = ?
+              )
+            )
+          ORDER BY CASE u.role WHEN 'tenant' THEN 0 ELSE 1 END,
+                   COALESCE(u.name, u.email)
+        `).bind(authUser.id, authUser.id).all();
+
+    const accounts = [];
+    for (const row of rows.results || []) {
+      const access = await env.DB.prepare(`
+        SELECT h.id, h.name
+        FROM user_house_access uha
+        JOIN houses h ON h.id = uha.house_id
+        WHERE uha.user_id = ?
+        ORDER BY h.name
+      `).bind(row.id).all();
+      accounts.push({
+        ...row,
+        house_ids: (access.results || []).map(h => h.id),
+        house_names: (access.results || []).map(h => h.name)
+      });
+    }
+    return json({ accounts });
+  } catch (error) {
+    console.error('List managed accounts error:', error);
+    return json({ error: 'Failed to fetch accounts' }, 500);
+  }
+}
+
+export async function updateManagedAccount(request, env, authUser, targetUserId) {
+  const actorRole = String(authUser?.role || '').toLowerCase();
+  if (!['admin', 'owner'].includes(actorRole)) return json({ error: 'Forbidden' }, 403);
+
+  const id = Number(targetUserId);
+  if (!Number.isSafeInteger(id) || id <= 0) return json({ error: 'Invalid account ID' }, 400);
+
+  const parsed = await parseJsonBody(request);
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const payload = parsed.data || {};
+
+  try {
+    const target = await env.DB.prepare(
+      'SELECT id, name, email, role FROM users WHERE id = ?'
+    ).bind(id).first();
+    if (!target) return json({ error: 'Account not found' }, 404);
+
+    const targetRole = String(target.role || '').toLowerCase();
+    if (!['owner', 'tenant', 'user'].includes(targetRole)) {
+      return json({ error: 'This account role cannot be edited here' }, 403);
+    }
+    if (actorRole === 'owner') {
+      if (targetRole === 'owner') return json({ error: 'Owners cannot edit owner accounts' }, 403);
+      const managed = await env.DB.prepare(`
+        SELECT 1 FROM user_house_access uha
+        JOIN houses h ON h.id = uha.house_id
+        WHERE uha.user_id = ? AND h.owner_id = ?
+        UNION
+        SELECT 1 FROM user_device_access uda
+        JOIN devices d ON d.id = uda.device_id
+        JOIN houses h ON h.id = d.house_id
+        WHERE uda.user_id = ? AND h.owner_id = ?
+        LIMIT 1
+      `).bind(id, authUser.id, id, authUser.id).first();
+      if (!managed) return json({ error: 'You can only edit accounts assigned to your properties' }, 403);
+    }
+
+    // Role changes are intentionally not supported: converting tenant/user/owner
+    // can invalidate tenant records and access semantics.
+    if (payload.role !== undefined && String(payload.role).toLowerCase() !== targetRole) {
+      return json({ error: 'Account role cannot be changed while editing' }, 400);
+    }
+
+    const name = typeof payload.name === 'string' ? payload.name.trim() : target.name;
+    if (!name || name.length > 100) return json({ error: 'A valid name is required' }, 400);
+    const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : target.email;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'A valid email is required' }, 400);
+    const duplicate = await env.DB.prepare('SELECT id FROM users WHERE email = ? AND id <> ?').bind(email, id).first();
+    if (duplicate) return json({ error: 'Email already exists' }, 409);
+
+    await env.DB.prepare('UPDATE users SET name = ?, email = ? WHERE id = ?').bind(name, email, id).run();
+
+    if (targetRole === 'tenant') {
+      const tenant = await env.DB.prepare('SELECT * FROM tenants WHERE user_id = ?').bind(id).first();
+      if (!tenant) return json({ error: 'Tenant profile is missing for this account' }, 409);
+      const numberField = (key, fallback) => {
+        if (payload[key] === undefined || payload[key] === null || payload[key] === '') return fallback;
+        const value = Number(payload[key]);
+        return Number.isFinite(value) && value >= 0 ? value : NaN;
+      };
+      const balance = numberField('balance', tenant.balance ?? 0);
+      const deposit = numberField('deposit', tenant.deposit ?? 0);
+      const rent = numberField('rent_amount', tenant.rent_amount ?? 0);
+      if (![balance, deposit, rent].every(Number.isFinite)) return json({ error: 'Tenant amounts must be valid non-negative numbers' }, 400);
+      const billingCycle = payload.billing_cycle === undefined ? tenant.billing_cycle : String(payload.billing_cycle).trim().toLowerCase();
+      if (!['monthly', 'weekly', 'biweekly'].includes(billingCycle)) return json({ error: 'Invalid billing cycle' }, 400);
+      const leasedUnit = payload.leased_unit === undefined ? tenant.leased_unit : String(payload.leased_unit).trim();
+      const onboardDate = payload.onboard_date === undefined ? tenant.onboard_date : String(payload.onboard_date);
+      if (onboardDate && Number.isNaN(new Date(onboardDate).getTime())) return json({ error: 'Invalid move-in date' }, 400);
+      await env.DB.prepare(`
+        UPDATE tenants SET balance = ?, deposit = ?, rent_amount = ?,
+          billing_cycle = ?, leased_unit = ?, onboard_date = ?
+        WHERE user_id = ?
+      `).bind(balance, deposit, rent, billingCycle, leasedUnit, onboardDate, id).run();
+    }
+
+    // Update house assignment only when the client explicitly sends house_ids/house_id.
+    // Device-level permissions are intentionally untouched.
+    const assignmentProvided = Array.isArray(payload.house_ids) || Object.prototype.hasOwnProperty.call(payload, 'house_id');
+    if (assignmentProvided && targetRole !== 'owner') {
+      let requested = Array.isArray(payload.house_ids) ? payload.house_ids : (payload.house_id ? [payload.house_id] : []);
+      requested = [...new Set(requested.map(Number))];
+      if (targetRole === 'tenant' && requested.length > 1) return json({ error: 'A tenant can be assigned to one property at a time' }, 400);
+      if (requested.some(value => !Number.isSafeInteger(value) || value <= 0)) return json({ error: 'Invalid property assignment' }, 400);
+      if (targetRole === 'tenant' && requested.length !== 1) return json({ error: 'A tenant must have one assigned property' }, 400);
+
+      for (const houseId of requested) {
+        const house = actorRole === 'owner'
+          ? await env.DB.prepare('SELECT id FROM houses WHERE id = ? AND owner_id = ?').bind(houseId, authUser.id).first()
+          : await env.DB.prepare('SELECT id FROM houses WHERE id = ?').bind(houseId).first();
+        if (!house) return json({ error: actorRole === 'owner' ? 'You can only assign accounts to properties you own' : 'Property not found' }, actorRole === 'owner' ? 403 : 404);
+      }
+
+      if (actorRole === 'admin') {
+        await env.DB.prepare('DELETE FROM user_house_access WHERE user_id = ?').bind(id).run();
+      } else {
+        await env.DB.prepare(`
+          DELETE FROM user_house_access
+          WHERE user_id = ? AND house_id IN (SELECT id FROM houses WHERE owner_id = ?)
+        `).bind(id, authUser.id).run();
+      }
+      for (const houseId of requested) {
+        await env.DB.prepare(`
+          INSERT OR IGNORE INTO user_house_access (user_id, house_id, access_level, created_at)
+          VALUES (?, ?, ?, ?)
+        `).bind(id, houseId, targetRole === 'tenant' ? 'tenant' : 'viewer', new Date().toISOString()).run();
+      }
+    }
+
+    return json({ success: true, message: 'Account updated successfully' });
+  } catch (error) {
+    console.error('Update managed account error:', error);
+    return json({ error: 'Failed to update account' }, 500);
+  }
+}
+
 
 
 export async function login(request, env) {
