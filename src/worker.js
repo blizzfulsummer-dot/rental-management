@@ -32,8 +32,7 @@ import {
 } from './fingerprints.js';
 
 const ALLOWED_ORIGINS = [
-  'https://test-front-env.pages.dev',
-  'https://my-other-site.pages.dev',
+  'https://reman.ehexibit.com',
   'https://rental-management.ehexibit.com'
 ];
 
