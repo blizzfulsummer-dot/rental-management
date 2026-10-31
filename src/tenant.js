@@ -734,6 +734,7 @@ export async function deleteHouse(request, env, authUser, houseId) {
 }
 
 
+
 export async function listHouseDevices(env, authUser, houseId) {
   const validation = validateId(houseId);
 
@@ -746,7 +747,7 @@ export async function listHouseDevices(env, authUser, houseId) {
   // Admin: all devices.
   if (authUser.role === 'admin') {
     const devices = await env.DB.prepare(`
-      SELECT *
+      SELECT *, name AS device_name
       FROM devices
       WHERE house_id = ?
       ORDER BY created_at DESC
@@ -768,7 +769,7 @@ export async function listHouseDevices(env, authUser, houseId) {
     }
 
     const devices = await env.DB.prepare(`
-      SELECT *
+      SELECT *, name AS device_name
       FROM devices
       WHERE house_id = ?
       ORDER BY created_at DESC
@@ -800,7 +801,7 @@ export async function listHouseDevices(env, authUser, houseId) {
 
   // Only explicitly authorized devices are returned.
   const devices = await env.DB.prepare(`
-    SELECT d.*
+    SELECT d.*, d.name AS device_name
     FROM devices d
     JOIN user_device_access uda ON uda.device_id = d.id
     WHERE d.house_id = ?

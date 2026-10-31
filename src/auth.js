@@ -787,11 +787,17 @@ export async function login(request, env) {
     const refreshTokenRaw = crypto.randomUUID();
     await env.DB.prepare('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)').bind(user.id, refreshTokenRaw, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()).run();
 
-    return json({
+   return json({
   success: true,
   accessToken,
   refreshToken: refreshTokenRaw,
-  requiresChangePassword: Number(user.requires_change_password) === 1
+  requiresChangePassword: Number(user.requires_change_password) === 1,
+  user: {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role
+  }
 });
   } catch (error) {
     console.error('Login error:', error);

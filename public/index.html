@@ -2746,6 +2746,7 @@
     (() => {
       const eyeIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
       const eyeOffIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 4-.8"/></svg>';
+      
       function enhancePasswordInputs() {
         document.querySelectorAll('input[type="password"]:not([data-visibility-ready])').forEach(input => {
           input.dataset.visibilityReady = 'true';
@@ -2772,6 +2773,7 @@
           wrap.appendChild(toggle);
         });
       }
+
       function showToast(message, type = 'success') {
         const region = document.getElementById('toastRegion');
         if (!region || !message) return;
@@ -2781,9 +2783,11 @@
         region.appendChild(toast);
         window.setTimeout(() => toast.remove(), 4200);
       }
+
       enhancePasswordInputs();
       const observer = new MutationObserver(() => enhancePasswordInputs());
       observer.observe(document.body, { childList: true, subtree: true });
+
       document.addEventListener('click', event => {
         const button = event.target.closest('#refreshBtn');
         if (!button) return;
@@ -2800,39 +2804,59 @@
         };
         window.setTimeout(waitForRefresh, 120);
       });
+
       window.remanUX = { showToast };
+
+      // UNIVERSAL SUBMIT HANDLER & PROGRESS LOADER
       document.addEventListener('submit', event => {
         const form = event.target;
-        const submit = form.querySelector('button[type="submit"],input[type="submit"]');
-        if (!submit || form.id === 'loginForm') return;
+        if (!(form instanceof HTMLFormElement)) return;
+
+        // Find the submit button that was clicked or use the first primary submit button in the form
+        const submitBtn = event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+        if (!submitBtn) return;
+
+        // Prevent duplicate trigger execution if already submitting
         if (form.dataset.remanSubmitting === 'true') return;
         form.dataset.remanSubmitting = 'true';
-        const initial = submit.dataset.initialLabel || submit.textContent.trim() || 'Submit';
-        if (!submit.dataset.initialHtml) submit.dataset.initialHtml = submit.innerHTML;
-        submit.dataset.initialLabel = initial;
-        submit.disabled = true;
-        submit.setAttribute('aria-busy', 'true');
-        submit.dataset.busy = 'true';
-        const busyLabel = /password/i.test(initial) ? 'Updating…' : /save/i.test(initial) ? 'Saving…' : 'Submitting…';
-        submit.innerHTML = `<span class="button-spinner" aria-hidden="true"></span><span>${busyLabel}</span>`;
-        const restoreSubmit = () => {
-          if (!form.isConnected) return;
-          const overlay = document.getElementById('globalLoading');
-          if (overlay && overlay.classList.contains('visible') && Date.now() - startedAt < 60000) {
-            window.setTimeout(restoreSubmit, 140);
-            return;
-          }
+
+        // Save original HTML structure/label so we can restore it accurately later
+        const initialHtml = submitBtn.dataset.initialHtml || submitBtn.innerHTML;
+        if (!submitBtn.dataset.initialHtml) {
+          submitBtn.dataset.initialHtml = initialHtml;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.setAttribute('aria-busy', 'true');
+        
+        // Dynamically choose a helpful progress label based on button text or context
+        const currentText = submitBtn.textContent.trim().toLowerCase();
+        let busyLabel = 'Working…';
+        if (currentText.includes('password') || currentText.includes('update')) busyLabel = 'Updating…';
+        else if (currentText.includes('save') || currentText.includes('create') || currentText.includes('add')) busyLabel = 'Saving…';
+        else if (currentText.includes('sign in') || currentText.includes('login')) busyLabel = 'Signing in…';
+        else if (currentText.includes('send') || currentText.includes('request')) busyLabel = 'Sending…';
+
+        submitBtn.innerHTML = `<span class="button-spinner" aria-hidden="true"></span><span>${busyLabel}</span>`;
+
+        // Function to safely restore button state once API response settles
+        const restoreButton = () => {
           delete form.dataset.remanSubmitting;
-          if (submit.isConnected && submit.dataset.busy === 'true') {
-            submit.disabled = false;
-            submit.innerHTML = submit.dataset.initialHtml || initial;
-            delete submit.dataset.initialHtml;
-            submit.removeAttribute('aria-busy');
-            delete submit.dataset.busy;
+          if (submitBtn.isConnected) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = submitBtn.dataset.initialHtml;
+            submitBtn.removeAttribute('aria-busy');
           }
         };
-        const startedAt = Date.now();
-        window.setTimeout(restoreSubmit, 180);
+
+        // If the form handler uses an async action, we listen for custom completion 
+        // or fall back safely to automatic timeout resetting if unhandled.
+        if (form.dataset.asyncSubmit === 'true') {
+          form.addEventListener('reman-submit-complete', restoreButton, { once: true });
+        } else {
+          // Standard timeout fallback ensuring buttons never get stuck permanently on network drop
+          window.setTimeout(restoreButton, 1200);
+        }
       }, true);
     })();
   </script>
