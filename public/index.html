@@ -449,25 +449,6 @@
       border-radius: 8px;
     }
 
-    .house-selector {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 16px;
-      color: var(--muted);
-      font-weight: 700;
-    }
-    .house-selector select {
-      min-width: min(100%, 260px);
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: white;
-      color: var(--text);
-      font: inherit;
-    }
-
     @media (max-width: 900px) {
       .layout { grid-template-columns: 1fr; }
       .dashboard { padding: 0 10px 24px; }
@@ -638,8 +619,6 @@
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
     }
 
-
-
     /* ReMan Modern Experience — design system override */
     :root {
       --bg:#f5f7fb; --panel:#fff; --panel-soft:#f8fafc; --primary:#4f46e5;
@@ -729,8 +708,7 @@
     @media(max-width:560px) { .screen { padding:12px; } .login-shell { padding:8px; } .login-card { padding:26px 21px; } .topbar { padding:14px;align-items:flex-start; } .user-meta { gap:8px; } .user-meta strong { font-size:13px; } .view-tabs { margin-left:-2px;margin-right:-2px; } .panel { padding:16px; } .stat-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; } .stat-card { padding:16px; } .stat-value { font-size:1.65rem; } }
     @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important;transition-duration:.01ms!important; } }
 
-
-    /* Interaction polish: no full-screen loading veil over the login form. */
+    /* Interaction polish */
     .button-spinner { width:15px;height:15px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;display:inline-block;animation:reman-spin .7s linear infinite;vertical-align:middle;margin-right:9px; }
     #loginBtn { display:flex;align-items:center;justify-content:center;min-height:48px;transition:opacity .18s ease,transform .18s ease; }
     #loginBtn:disabled { opacity:.82;cursor:wait; }
@@ -787,9 +765,6 @@
     .access-house-subtitle { margin:0;color:var(--muted);font-size:13px; }
     .access-toolbar .house-selector { margin:0; }
     .access-toolbar .house-selector select { min-width:220px; }
-    @media(max-width:560px) { .brand-subtitle { display:block;margin:2px 0 0; } .access-add-panel { grid-template-columns:minmax(0,1fr); } .access-add-panel .primary-btn { width:100%; } .access-user-row { align-items:flex-start;flex-wrap:wrap; } .access-row-actions { width:100%;justify-content:space-between;padding-left:52px; } }
-    @media(max-width:560px) { .device-card-head { padding:16px 14px 14px;gap:10px;flex-wrap:wrap; } .device-icon-tile { width:42px;height:42px;flex-basis:42px; } .device-card-title { min-width:calc(100% - 64px); } .device-status { margin-left:52px; } .device-card-divider { margin:0 14px; } .device-section-label { padding:13px 14px 0; } .device-card-modern > .inline-actions { padding:10px 14px 14px; } }
-
 
     .auth-links{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
     .auth-link{border:0;background:transparent;color:#4f46e5;font-weight:750;font-size:13px;cursor:pointer;padding:7px 0;text-decoration:none}
@@ -805,7 +780,6 @@
     .auth-dialog .primary-btn{width:100%}
     .auth-dialog .alert{margin-top:12px}
     .auth-dialog .auth-link{margin-top:8px}
-
 
     /* Account management refinement */
     .account-toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin:4px 0 18px}
@@ -830,7 +804,6 @@
     .account-dialog .dialog-actions button{width:auto;min-width:110px}
     .account-hint{font-size:12px;color:var(--muted);margin:-5px 0 0}
     @media(max-width:620px){.account-dialog{padding:18px}.account-dialog .tenant-form-grid{grid-template-columns:1fr}.account-toolbar>*{width:100%}}
-
   </style>
 </head>
 <body>
@@ -843,7 +816,6 @@
       <div class="login-card">
         <p class="eyebrow">SMART PROPERTY MANAGEMENT</p>
         <h1>Welcome Home!</h1>
-        <!--p class="subtle">Manage y</p-->
 
         <div class="field">
           <label for="email">Email</label>
@@ -901,8 +873,8 @@
             <h2>Change password</h2>
           </div>
           <form id="passwordForm" class="password-form">
-            <input id="oldPassword" type="password" placeholder="Current password" />
-            <input id="newPassword" type="password" placeholder="New password" />
+            <input id="oldPassword" type="password" placeholder="Current password" required />
+            <input id="newPassword" type="password" placeholder="New password" required />
             <button type="submit" class="primary-btn" style="width:100%;">Update Password</button>
           </form>
           <div id="passwordAlert" class="alert"></div>
@@ -951,14 +923,14 @@
       <p id="accountEditorHint" class="account-hint">New accounts receive a temporary password and must change it on first sign-in.</p>
       <div id="accountEditorAlert" class="alert" role="status" aria-live="polite"></div>
       <div id="accountCredentialFallback" hidden style="margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:12px;">
-  <strong>Temporary password</strong>
-  <div style="display:flex;gap:8px;margin-top:8px;">
-    <input id="accountTempPassword" type="text" readonly style="flex:1;min-width:0;" />
-    <button type="button" id="copyAccountTempPassword" class="secondary-btn">Copy</button>
-  </div>
-  <p id="accountEmailStatus" class="account-hint"></p>
-  <p class="account-hint">Share securely. This password expires in 24 hours and must be changed on first login.</p>
-</div>
+        <strong>Temporary password</strong>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <input id="accountTempPassword" type="text" readonly style="flex:1;min-width:0;" />
+          <button type="button" id="copyAccountTempPassword" class="secondary-btn">Copy</button>
+        </div>
+        <p id="accountEmailStatus" class="account-hint"></p>
+        <p class="account-hint">Share securely. This password expires in 24 hours and must be changed on first login.</p>
+      </div>
       <div class="dialog-actions"><button type="button" class="secondary-btn" data-close-account-dialog>Cancel</button><button id="accountEditorSubmit" type="submit" class="primary-btn">Create account</button></div>
     </form>
   </dialog>
@@ -1002,24 +974,15 @@
       const cloudApi = 'https://reman.ehexibit.com';
       const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
 
-      // Opening this HTML directly (file://) gives the page an opaque "null" origin.
-      // Use the deployed API instead of constructing a file:///api/... request.
       if (window.location.protocol === 'file:') {
         return cloudApi;
       }
-
-      // Use a locally running Wrangler API only when the page is served from its port.
-      // A static server such as `python -m http.server 8080` is not the API server.
       if (isLocalHost && window.location.port === '8787') {
         return origin;
       }
-
-      // Local static preview and the deployed ReMan portal use the Cloudflare API.
       if (isLocalHost || host === 'reman.ehexibit.com') {
         return cloudApi;
       }
-
-      // For any other HTTP(S) deployment, assume the API is served on the same origin.
       return origin;
     }
 
@@ -1027,8 +990,6 @@
     const WS_BASE = API_BASE.replace(/^http/, 'ws');
 
     const state = {
-      // Keep the access token in memory and persist it with the refresh token
-      // so a normal browser reload does not sign the user out.
       jwt: (() => { try { return localStorage.getItem('accessToken') || ''; } catch { return ''; } })(),
       profile: null,
       role: null,
@@ -1058,11 +1019,13 @@
     let passwordResetEmail = '';
 
     function showAlert(element, message, type) {
+      if (!element) return;
       element.textContent = message;
       element.className = `alert ${type} show`;
     }
 
     function clearAlert(element) {
+      if (!element) return;
       element.textContent = '';
       element.className = 'alert';
     }
@@ -1076,7 +1039,6 @@
         "'": '&#39;'
       })[character]);
     }
-
 
     function formatRole(role) {
       return role ? role.toUpperCase() : 'USER';
@@ -1135,7 +1097,6 @@
       dashboardScreen.classList.toggle('active', screen === 'dashboard');
     }
 
-    // Requests never block the whole dashboard. Individual buttons/forms show their own busy state.
     function setGlobalLoading() {
       const overlay = document.getElementById('globalLoading');
       if (overlay) {
@@ -1181,15 +1142,13 @@
           });
           const data = await response.json().catch(() => ({}));
           if (!response.ok || !data.accessToken) {
-            // Only discard credentials when the server explicitly rejects the
-            // refresh session. Network errors and server errors are recoverable.
             if (response.status === 401 || response.status === 403) clearAuthTokens();
             return false;
           }
           saveAuthTokens(data.accessToken, data.refreshToken);
           return true;
         } catch (error) {
-          console.warn('ReMan token refresh failed; keeping the saved session:', error);
+          console.warn('ReMan token refresh failed:', error);
           return false;
         }
       })();
@@ -1255,7 +1214,7 @@
       }
     }
 
-        function getAuthHeaders() {
+    function getAuthHeaders() {
       return {
         Authorization: `Bearer ${state.jwt}`,
         'Content-Type': 'application/json'
@@ -1273,8 +1232,7 @@
       if (role === 'tenant' || role === 'user') {
         cards = [
           { label: 'Assigned Property', value: state.houses.length || 0 },
-          { label: 'Devices', value: state.devices.length }/*,
-          { label: 'Role', value: formatRole(role).slice(0, 6) }*/
+          { label: 'Devices', value: state.devices.length }
         ];
       }
 
@@ -1285,7 +1243,6 @@
           <button type="button" class="stat-card stat-card-link" data-navigate-view="${safeTarget}" aria-label="Open ${escapeHtml(card.label)} section">
             <span class="stat-label">${escapeHtml(card.label)}</span>
             <span class="stat-value">${escapeHtml(card.value)}</span>
-            
           </button>`;
       }).join('');
       statsGrid.querySelectorAll('[data-navigate-view]').forEach(card => card.addEventListener('click', () => navigateToView(card.dataset.navigateView)));
@@ -1345,8 +1302,6 @@
 
       const openHouse = card => {
         state.selectedHouseId = Number(card.dataset.openHouse);
-        // On Overview, selecting the card opens Properties; on the Properties
-        // tab, selecting a card opens that property's Devices.
         navigateToView(state.activeView === 'overview' ? 'property' : 'devices');
       };
       mainPanelContent.querySelectorAll('[data-open-house]').forEach(card => {
@@ -1521,7 +1476,6 @@
           <div class="account-actions">${canEditAccount(account) ? `<button type="button" class="mini-btn" data-edit-account="${escapeHtml(account.id)}">Edit account</button>` : '<span class="meta">View only</span>'}</div>
         </article>`;
       }).join('');
-      const manageableHouses = getManageableHouses();
       mainPanelContent.innerHTML = `
         <div class="account-toolbar"><input id="accountSearch" type="search" placeholder="Search name or email" aria-label="Search accounts"><select id="accountRoleFilter" aria-label="Filter by role"><option value="all">All account types</option><option value="owner">Owners</option><option value="tenant">Tenants</option><option value="user">Regular users</option></select><button type="button" id="createAccountBtn" class="primary-btn" style="width:auto">+ Create account</button></div>
         <div id="accountGrid" class="account-grid">${cards || '<div class="empty">No accounts found in your management scope.</div>'}</div>`;
@@ -1559,7 +1513,7 @@
       form.reset();
       form.elements.account_id.value = account?.id || '';
       roles.value = account?.role || (state.role === 'admin' ? 'owner' : 'tenant');
-      roles.disabled = isEdit; // Role changes require a separate migration workflow.
+      roles.disabled = isEdit;
       form.elements.name.value = account?.name || '';
       form.elements.email.value = account?.email || '';
       [...houseSelect.options].forEach(option => option.selected = (account?.house_ids || []).map(Number).includes(Number(option.value)));
@@ -1571,14 +1525,14 @@
       form.elements.onboard_date.value = account?.onboard_date ? String(account.onboard_date).slice(0,10) : new Date().toISOString().slice(0,10);
       document.getElementById('accountEditorTitle').textContent = isEdit ? 'Edit account' : 'Create account';
       document.getElementById('accountEditorSubmit').textContent = isEdit ? 'Save changes' : 'Create account';
-      document.getElementById('accountEditorHint').textContent = isEdit ? 'Email and account details will be updated. Passwords and existing device permissions are not changed.' : 'New accounts receive a temporary password and must change it on first sign-in.';
+      document.getElementById('accountEditorHint').textContent = isEdit ? 'Email and account details will be updated.' : 'New accounts receive a temporary password and must change it on first sign-in.';
       clearAlert(document.getElementById('accountEditorAlert'));
       const credentialFallback = document.getElementById('accountCredentialFallback');
 
-credentialFallback.hidden = true;
-document.getElementById('accountTempPassword').value = '';
-document.getElementById('accountEmailStatus').textContent = '';
-document.getElementById('copyAccountTempPassword').textContent = 'Copy password';
+      credentialFallback.hidden = true;
+      document.getElementById('accountTempPassword').value = '';
+      document.getElementById('accountEmailStatus').textContent = '';
+      document.getElementById('copyAccountTempPassword').textContent = 'Copy password';
       const sync = () => {
         const isTenant = roles.value === 'tenant';
         document.querySelectorAll('#accountEditorForm .account-tenant-only').forEach(field => {
@@ -1594,129 +1548,116 @@ document.getElementById('copyAccountTempPassword').textContent = 'Copy password'
       dialog.showModal();
     }
 
+    async function handleAccountEditor(event) {
+      event.preventDefault();
 
-async function handleAccountEditor(event) {
-  event.preventDefault();
+      const form = event.currentTarget;
+      const button = document.getElementById('accountEditorSubmit');
+      const alert = document.getElementById('accountEditorAlert');
+      const values = new FormData(form);
 
-  const form = event.currentTarget;
-  const button = document.getElementById('accountEditorSubmit');
-  const alert = document.getElementById('accountEditorAlert');
-  const values = new FormData(form);
+      const accountId = String(values.get('account_id') || '').trim();
+      const isEdit = Boolean(accountId);
+      const role = isEdit ? null : String(values.get('role') || '').toLowerCase();
 
-  const accountId = String(values.get('account_id') || '').trim();
-  const isEdit = Boolean(accountId);
+      const houseSelect = document.getElementById('accountHouse');
+      const houseIds = [...houseSelect.selectedOptions]
+        .map(option => Number(option.value))
+        .filter(Boolean);
 
-  // Only read the role when creating a new account.
-  const role = isEdit
-    ? null
-    : String(values.get('role') || '').toLowerCase();
+      const payload = {
+        name: String(values.get('name') || '').trim(),
+        email: String(values.get('email') || '').trim()
+      };
 
-  const houseSelect = document.getElementById('accountHouse');
-  const houseIds = [...houseSelect.selectedOptions]
-    .map(option => Number(option.value))
-    .filter(Boolean);
-
-  const payload = {
-    name: String(values.get('name') || '').trim(),
-    email: String(values.get('email') || '').trim()
-  };
-
-  if (!payload.name || !payload.email) {
-    return showAlert(alert, 'Name and email are required.', 'error');
-  }
-
-  // Build the role-specific payload only during account creation.
-  if (!isEdit) {
-    payload.role = role;
-    payload.house_ids = houseIds;
-
-    if (role !== 'owner' && !houseIds.length) {
-      return showAlert(alert, 'Assign at least one property to this account.', 'error');
-    }
-  } else {
-    // Editing account information: update property assignments
-    // without changing the account's role.
-    payload.house_ids = houseIds;
-
-    if (houseIds.length) {
-      payload.house_id = houseIds[0];
-    }
-  }
-
-  if (role === 'tenant' || (isEdit && form.elements.role.value === 'tenant')) {
-    Object.assign(payload, {
-      leased_unit: String(values.get('leased_unit') || '').trim(),
-      rent_amount: Number(values.get('rent_amount')),
-      deposit: Number(values.get('deposit') || 0),
-      balance: Number(values.get('balance') || 0),
-      billing_cycle: String(values.get('billing_cycle') || 'monthly'),
-      onboard_date: String(values.get('onboard_date') || '')
-    });
-
-    if (!isEdit) {
-      payload.house_id = houseIds[0];
-    }
-  }
-
-  setButtonBusy(button, true, 'Saving…');
-
-  try {
-    if (isEdit) {
-      await requestJson(
-        `${API_BASE}/api/accounts/${encodeURIComponent(accountId)}`,
-        {
-          method: 'PUT',
-          headers: getAuthHeaders(),
-          body: JSON.stringify(payload)
-        }
-      );
-
-      showAlert(alert, 'Account updated successfully.', 'success');
-
-    } else {
-      const created = await requestJson(
-        `${API_BASE}/api/provisioning/register`,
-        {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify(payload)
-        }
-      );
-
-      if (!created.success || !created.user?.id || !created.tempPassword) {
-        throw new Error(created.message || 'Account creation was not confirmed.');
+      if (!payload.name || !payload.email) {
+        return showAlert(alert, 'Name and email are required.', 'error');
       }
 
-      showAlert(alert, 'Account created successfully.', 'success');
+      if (!isEdit) {
+        payload.role = role;
+        payload.house_ids = houseIds;
 
-      const fallback = document.getElementById('accountCredentialFallback');
-      const passwordField = document.getElementById('accountTempPassword');
-      const emailStatus = document.getElementById('accountEmailStatus');
+        if (role !== 'owner' && !houseIds.length) {
+          return showAlert(alert, 'Assign at least one property to this account.', 'error');
+        }
+      } else {
+        payload.house_ids = houseIds;
+        if (houseIds.length) {
+          payload.house_id = houseIds[0];
+        }
+      }
 
-      passwordField.value = created.tempPassword;
-      emailStatus.textContent = created.emailSent
-        ? 'Email accepted by Resend. Check the recipient inbox and spam folder.'
-        : 'Email sending failed. Please share the temporary password securely.';
+      if (role === 'tenant' || (isEdit && form.elements.role.value === 'tenant')) {
+        Object.assign(payload, {
+          leased_unit: String(values.get('leased_unit') || '').trim(),
+          rent_amount: Number(values.get('rent_amount')),
+          deposit: Number(values.get('deposit') || 0),
+          balance: Number(values.get('balance') || 0),
+          billing_cycle: String(values.get('billing_cycle') || 'monthly'),
+          onboard_date: String(values.get('onboard_date') || '')
+        });
 
-      fallback.hidden = false;
+        if (!isEdit) {
+          payload.house_id = houseIds[0];
+        }
+      }
+
+      setButtonBusy(button, true, 'Saving…');
+
+      try {
+        if (isEdit) {
+          await requestJson(
+            `${API_BASE}/api/accounts/${encodeURIComponent(accountId)}`,
+            {
+              method: 'PUT',
+              headers: getAuthHeaders(),
+              body: JSON.stringify(payload)
+            }
+          );
+          showAlert(alert, 'Account updated successfully.', 'success');
+        } else {
+          const created = await requestJson(
+            `${API_BASE}/api/provisioning/register`,
+            {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify(payload)
+            }
+          );
+
+          if (!created.success || !created.user?.id || !created.tempPassword) {
+            throw new Error(created.message || 'Account creation was not confirmed.');
+          }
+
+          showAlert(alert, 'Account created successfully.', 'success');
+
+          const fallback = document.getElementById('accountCredentialFallback');
+          const passwordField = document.getElementById('accountTempPassword');
+          const emailStatus = document.getElementById('accountEmailStatus');
+
+          passwordField.value = created.tempPassword;
+          emailStatus.textContent = created.emailSent
+            ? 'Email accepted by Resend. Check the recipient inbox and spam folder.'
+            : 'Email sending failed. Please share the temporary password securely.';
+
+          fallback.hidden = false;
+        }
+
+        await loadDashboardData();
+
+        if (isEdit) {
+          window.setTimeout(() => {
+            const dialog = document.getElementById('accountEditorDialog');
+            if (dialog.open) dialog.close();
+          }, 900);
+        }
+      } catch (error) {
+        showAlert(alert, error.message || 'Unable to save account.', 'error');
+      } finally {
+        setButtonBusy(button, false);
+      }
     }
-
-    await loadDashboardData();
-
-    if (isEdit) {
-      window.setTimeout(() => {
-        const dialog = document.getElementById('accountEditorDialog');
-        if (dialog.open) dialog.close();
-      }, 900);
-    }
-
-  } catch (error) {
-    showAlert(alert, error.message || 'Unable to save account.', 'error');
-  } finally {
-    setButtonBusy(button, false);
-  }
-}
-
 
     function renderDeviceList() {
       if (!state.houses.length) {
@@ -1728,9 +1669,7 @@ async function handleAccountEditor(event) {
       state.selectedHouseId = Number(selectedHouse.id);
       const selectedHouseId = selectedHouse.id;
       const canManageDevices = state.role === 'admin' || state.role === 'owner';
-      const visibleDevices = state.devices.filter(device => {
-        return Number(device.house_id) === Number(selectedHouseId);
-      });
+      const visibleDevices = state.devices.filter(device => Number(device.house_id) === Number(selectedHouseId));
 
       const cards = visibleDevices.map(device => `
         ${(() => {
@@ -1884,6 +1823,7 @@ async function handleAccountEditor(event) {
           }
         });
       });
+
       function showPairingKey(deviceId, pairingKey) {
         const notice = document.getElementById('deviceNotice');
         if (!notice) return;
@@ -1912,6 +1852,7 @@ async function handleAccountEditor(event) {
         notice.replaceChildren(panel);
         notice.className = 'alert success show';
       }
+
       const refreshDevices = async () => {
         state.devices = [];
         await loadDashboardData();
@@ -2276,7 +2217,7 @@ async function handleAccountEditor(event) {
           <div class="inline-actions">
             <button class="mini-btn" type="button" data-house-id="${house.id}" data-action="select-house">View Devices</button>
           </div>
-        </div>
+        </article>
       `).join('');
 
       mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
@@ -2400,97 +2341,85 @@ async function handleAccountEditor(event) {
       }
     }
 
-    
-async function handleLogin() {
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  const loginBtn = document.getElementById('loginBtn');
+    async function handleLogin() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const loginBtn = document.getElementById('loginBtn');
 
-  if (!email || !password) {
-    showAlert(loginAlert, 'Email and password are required.', 'error');
-    return;
-  }
+      if (!email || !password) {
+        showAlert(loginAlert, 'Email and password are required.', 'error');
+        return;
+      }
 
-  setButtonBusy(loginBtn, true, 'Signing in…');
-  clearAlert(loginAlert);
-  document.getElementById('forgotPasswordLink').hidden = true;
+      setButtonBusy(loginBtn, true, 'Signing in…');
+      clearAlert(loginAlert);
+      document.getElementById('forgotPasswordLink').hidden = true;
 
-  try {
-    const loginResponse = await requestJson(`${API_BASE}/api/login`, {
-      method: 'POST',
-      body: JSON.stringify({ email, password })
-    });
+      try {
+        const loginResponse = await requestJson(`${API_BASE}/api/login`, {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        });
 
-    if (!loginResponse.success || !loginResponse.accessToken) {
-      throw new Error(loginResponse.error || 'The login response did not include an access token.');
+        if (!loginResponse.success || !loginResponse.accessToken) {
+          throw new Error(loginResponse.error || 'The login response did not include an access token.');
+        }
+
+        saveAuthTokens(loginResponse.accessToken, loginResponse.refreshToken);
+
+        if (loginResponse.requiresChangePassword) {
+          state.profile = null;
+          state.role = 'user';
+          document.getElementById('passwordRequiredDialog').showModal();
+          return;
+        }
+
+        const meData = await requestJson(`${API_BASE}/api/me`, {
+          method: 'GET',
+          headers: getAuthHeaders()
+        });
+
+        if (!meData || !meData.user) {
+          throw new Error('Could not load user profile');
+        }
+
+        state.profile = {
+          ...meData.user,
+          requires_change_password: false
+        };
+
+        state.role = String(meData.user.role || 'user').toLowerCase();
+        state.activeView = 'overview';
+
+        try {
+          localStorage.setItem('userProfile', JSON.stringify(meData.user));
+          localStorage.setItem('portalRole', state.role);
+        } catch {}
+
+        userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
+        userRole.textContent = formatRole(state.role);
+
+        renderViewTabs();
+        setActiveScreen('dashboard');
+
+        clearAlert(passwordAlert);
+        await loadDashboardData();
+
+      } catch (error) {
+        clearAuthTokens();
+        showAlert(loginAlert, error.message || 'Login failed.', 'error');
+
+        const recoveryAllowed = error.code === 'INVALID_PASSWORD' && error.emailActive === true;
+        const recoveryLink = document.getElementById('forgotPasswordLink');
+        recoveryLink.hidden = !recoveryAllowed;
+
+        if (recoveryAllowed) {
+          document.getElementById('resetEmail').value = email;
+        }
+      } finally {
+        setButtonBusy(loginBtn, false);
+      }
     }
-
-    // Save tokens first. Temporary-password users need the access token
-    // to submit their new password.
-    saveAuthTokens(loginResponse.accessToken, loginResponse.refreshToken);
-
-    // IMPORTANT: Handle temporary-password accounts BEFORE /api/me.
-    if (loginResponse.requiresChangePassword) {
-      state.profile = null;
-      state.role = 'user';
-
-      document.getElementById('passwordRequiredDialog').showModal();
-      return;
-    }
-
-    // Normal account login continues here.
-    const meData = await requestJson(`${API_BASE}/api/me`, {
-      method: 'GET',
-      headers: getAuthHeaders()
-    });
-
-    if (!meData || !meData.user) {
-      throw new Error('Could not load user profile');
-    }
-
-    state.profile = {
-  ...meData.user,
-  requires_change_password: false
-};
-
-state.role = String(meData.user.role || 'user').toLowerCase();
-    state.activeView = 'overview';
-
-    try {
-      localStorage.setItem('userProfile', JSON.stringify(meData.user));
-      localStorage.setItem('portalRole', state.role);
-    } catch {}
-
-    userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
-    userRole.textContent = formatRole(state.role);
-
-    renderViewTabs();
-    setActiveScreen('dashboard');
-
-    clearAlert(passwordAlert);
-    await loadDashboardData();
-
-  } catch (error) {
-    // Do not leave invalid credentials in storage.
-    clearAuthTokens();
-
-    showAlert(loginAlert, error.message || 'Login failed.', 'error');
-
-    const recoveryAllowed =
-      error.code === 'INVALID_PASSWORD' &&
-      error.emailActive === true;
-
-    const recoveryLink = document.getElementById('forgotPasswordLink');
-    recoveryLink.hidden = !recoveryAllowed;
-
-    if (recoveryAllowed) {
-      document.getElementById('resetEmail').value = email;
-    }
-
-  } finally {
-    setButtonBusy(loginBtn, false);
-  }
-}
 
     async function restoreSession() {
       let refreshToken = '';
@@ -2500,7 +2429,7 @@ state.role = String(meData.user.role || 'user').toLowerCase();
       try {
         if (!state.jwt && refreshToken) {
           const refreshed = await refreshAccessToken();
-          if (!refreshed) return; // Keep credentials on temporary/network failures.
+          if (!refreshed) return;
         }
         const meData = await requestJson(`${API_BASE}/api/me`, {
           method: 'GET',
@@ -2508,8 +2437,10 @@ state.role = String(meData.user.role || 'user').toLowerCase();
         });
         if (!meData?.user) throw new Error('Could not restore the ReMan user profile.');
 
-        state.profile = meData.user;
-        state.profile.requires_change_password = Number(meData.user.requires_change_password) === 1;
+        state.profile = {
+          ...meData.user,
+          requires_change_password: Number(meData.user.requires_change_password) === 1
+        };
         state.role = String(meData.user.role || 'user').toLowerCase();
         state.activeView = 'overview';
         try {
@@ -2526,8 +2457,6 @@ state.role = String(meData.user.role || 'user').toLowerCase();
         await loadDashboardData();
       } catch (error) {
         console.warn('Could not restore ReMan session:', error);
-        // Do not log the user out for transient API/network failures. A refresh
-        // token rejected with 401/403 is already cleared by refreshAccessToken.
         let remainingRefreshToken = '';
         try { remainingRefreshToken = localStorage.getItem('refreshToken') || ''; } catch {}
         if (error.status === 401 && !remainingRefreshToken) clearAuthTokens();
@@ -2553,96 +2482,94 @@ state.role = String(meData.user.role || 'user').toLowerCase();
     }
 
     async function handlePasswordUpdate(event) {
-  event.preventDefault();
+      event.preventDefault();
 
-  const oldPassword = document.getElementById('oldPassword').value;
-  const newPassword = document.getElementById('newPassword').value;
+      const oldPassword = document.getElementById('oldPassword').value;
+      const newPassword = document.getElementById('newPassword').value;
 
-  if (!oldPassword || !newPassword) {
-    showAlert(passwordAlert, 'Both current and new password are required.', 'error');
-    return;
-  }
-
-  if (newPassword.length < 8) {
-    showAlert(passwordAlert, 'New password must be at least 8 characters.', 'error');
-    return;
-  }
-
-  const submitBtn = event.submitter || event.target.querySelector('[type="submit"]');
-
-  try {
-    if (submitBtn) setButtonBusy(submitBtn, true, 'Updating password…');
-
-    clearAlert(passwordAlert);
-
-    // Use the saved access token.
-    const token = localStorage.getItem('accessToken');
-
-    if (!token) {
-      throw new Error('Your login session has expired. Please sign in again.');
-    }
-
-    const result = await requestJson(`${API_BASE}/api/update_password`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        token,
-        oldPassword,
-        newPassword
-      })
-    });
-
-    showAlert(
-      passwordAlert,
-      result.message || 'Password updated successfully.',
-      'success'
-    );
-
-    document.getElementById('oldPassword').value = '';
-    document.getElementById('newPassword').value = '';
-
-    // Load the normal user profile now that the temporary password restriction is cleared.
-    const meData = await requestJson(`${API_BASE}/api/me`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`
+      if (!oldPassword || !newPassword) {
+        showAlert(passwordAlert, 'Both current and new password are required.', 'error');
+        return;
       }
-    });
 
-    if (!meData?.user) {
-      throw new Error('Password updated, but your user profile could not be loaded. Please sign in again.');
+      if (newPassword.length < 8) {
+        showAlert(passwordAlert, 'New password must be at least 8 characters.', 'error');
+        return;
+      }
+
+      const submitBtn = event.submitter || event.target.querySelector('[type="submit"]');
+
+      try {
+        if (submitBtn) setButtonBusy(submitBtn, true, 'Updating password…');
+        clearAlert(passwordAlert);
+
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+          throw new Error('Your login session has expired. Please sign in again.');
+        }
+
+        const result = await requestJson(`${API_BASE}/api/update_password`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            token,
+            oldPassword,
+            newPassword
+          })
+        });
+
+        showAlert(
+          passwordAlert,
+          result.message || 'Password updated successfully.',
+          'success'
+        );
+
+        document.getElementById('oldPassword').value = '';
+        document.getElementById('newPassword').value = '';
+
+        const meData = await requestJson(`${API_BASE}/api/me`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        if (!meData?.user) {
+          throw new Error('Password updated, but your user profile could not be loaded. Please sign in again.');
+        }
+
+        state.profile = {
+          ...meData.user,
+          requires_change_password: false
+        };
+        state.role = String(meData.user.role || 'user').toLowerCase();
+        state.activeView = 'overview';
+
+        localStorage.setItem('userProfile', JSON.stringify(meData.user));
+        localStorage.setItem('portalRole', state.role);
+
+        userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
+        userRole.textContent = formatRole(state.role);
+
+        renderViewTabs();
+
+        const dialog = document.getElementById('passwordRequiredDialog');
+        if (dialog?.open) dialog.close();
+
+        setActiveScreen('dashboard');
+        clearAlert(passwordAlert);
+
+        await loadDashboardData();
+
+      } catch (error) {
+        showAlert(passwordAlert, error.message || 'Password update failed.', 'error');
+      } finally {
+        if (submitBtn) setButtonBusy(submitBtn, false);
+      }
     }
 
-    state.profile = meData.user;
-    state.profile.requires_change_password = false;
-    state.role = String(meData.user.role || 'user').toLowerCase();
-    state.activeView = 'overview';
-
-    localStorage.setItem('userProfile', JSON.stringify(meData.user));
-    localStorage.setItem('portalRole', state.role);
-
-    userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
-    userRole.textContent = formatRole(state.role);
-
-    renderViewTabs();
-
-    // Close the mandatory password-change dialog.
-    const dialog = document.getElementById('passwordRequiredDialog');
-    if (dialog?.open) dialog.close();
-
-    setActiveScreen('dashboard');
-    clearAlert(passwordAlert);
-
-    await loadDashboardData();
-
-  } catch (error) {
-    showAlert(passwordAlert, error.message || 'Password update failed.', 'error');
-  } finally {
-    if (submitBtn) setButtonBusy(submitBtn, false);
-  }
-}
     async function handleRequiredPasswordUpdate(event) {
       event.preventDefault();
       const currentPassword = document.getElementById('requiredCurrentPassword').value;
@@ -2666,17 +2593,19 @@ state.role = String(meData.user.role || 'user').toLowerCase();
           method: 'POST',
           body: JSON.stringify({ token: state.jwt, oldPassword: currentPassword, newPassword })
         });
-        state.profile.requires_change_password = false;
+        if (state.profile) {
+          state.profile.requires_change_password = false;
+        }
         document.getElementById('passwordRequiredDialog').close();
         document.getElementById('passwordRequiredForm').reset();
         showAlert(passwordAlert, result.message || 'Password updated successfully.', 'success');
+        await restoreSession();
       } catch (error) {
         showAlert(alert, error.message || 'Password update failed.', 'error');
       } finally {
         submitButton.disabled = false;
       }
     }
-
 
     function openAuthDialog(id) {
       const dialog = document.getElementById(id);
@@ -2718,7 +2647,7 @@ state.role = String(meData.user.role || 'user').toLowerCase();
         });
         showAlert(alert, result.message || 'Account created. You can now sign in.', 'success');
         form.reset();
-        showToast(result.message || 'Account created successfully.');
+        if (window.remanUX?.showToast) window.remanUX.showToast(result.message || 'Account created successfully.');
       } catch (error) {
         showAlert(alert, error.message || 'Could not create account.', 'error');
       } finally {
@@ -2734,8 +2663,6 @@ state.role = String(meData.user.role || 'user').toLowerCase();
       clearAlert(alert);
       setButtonBusy(button, true, 'Sending code…');
       try {
-        // Requires a server endpoint that creates a short-lived, single-use OTP
-        // and sends it to the account's verified/active email address.
         const result = await requestJson(`${API_BASE}/api/password-reset/request`, {
           method: 'POST', body: JSON.stringify({ email })
         });
@@ -2791,22 +2718,20 @@ state.role = String(meData.user.role || 'user').toLowerCase();
     document.getElementById('passwordRequiredForm').addEventListener('submit', handleRequiredPasswordUpdate);
     document.getElementById('passwordRequiredDialog').addEventListener('cancel', event => event.preventDefault());
 
-    // Restore the saved ReMan session after the page has initialized.
     document.querySelectorAll('[data-close-account-dialog]').forEach(button => button.addEventListener('click', () => document.getElementById('accountEditorDialog').close()));
     document.getElementById('accountEditorForm').addEventListener('submit', handleAccountEditor);
 
     document.getElementById('copyAccountTempPassword').addEventListener('click', async () => {
-  const password = document.getElementById('accountTempPassword').value;
-
-  try {
-    await navigator.clipboard.writeText(password);
-    document.getElementById('copyAccountTempPassword').textContent = 'Copied!';
-  } catch {
-    document.getElementById('accountTempPassword').select();
-    document.execCommand('copy');
-    document.getElementById('copyAccountTempPassword').textContent = 'Copied!';
-  }
-});
+      const password = document.getElementById('accountTempPassword').value;
+      try {
+        await navigator.clipboard.writeText(password);
+        document.getElementById('copyAccountTempPassword').textContent = 'Copied!';
+      } catch {
+        document.getElementById('accountTempPassword').select();
+        document.execCommand('copy');
+        document.getElementById('copyAccountTempPassword').textContent = 'Copied!';
+      }
+    });
 
     restoreSession();
 
@@ -2856,12 +2781,6 @@ state.role = String(meData.user.role || 'user').toLowerCase();
         region.appendChild(toast);
         window.setTimeout(() => toast.remove(), 4200);
       }
-      // Provide visible loading feedback even while the page's data panel is being rendered.
-      function showInlineLoading() {
-        const panel = document.getElementById('mainPanelContent');
-        if (!panel || panel.dataset.loadingHint === 'shown') return;
-        panel.dataset.loadingHint = 'shown';
-      }
       enhancePasswordInputs();
       const observer = new MutationObserver(() => enhancePasswordInputs());
       observer.observe(document.body, { childList: true, subtree: true });
@@ -2873,7 +2792,6 @@ state.role = String(meData.user.role || 'user').toLowerCase();
         button.disabled = true;
         button.textContent = 'Refreshing…';
         const restore = () => { button.disabled = false; button.textContent = original; };
-        // requestJson owns the visible global fetch indicator; restore after the refresh promise settles.
         const waitForRefresh = () => {
           if (!button.isConnected) return;
           const overlay = document.getElementById('globalLoading');
@@ -2882,8 +2800,7 @@ state.role = String(meData.user.role || 'user').toLowerCase();
         };
         window.setTimeout(waitForRefresh, 120);
       });
-      // Export a tiny UX helper for existing handlers without changing API contracts.
-      window.remanUX = { showToast, showInlineLoading };
+      window.remanUX = { showToast };
       document.addEventListener('submit', event => {
         const form = event.target;
         const submit = form.querySelector('button[type="submit"],input[type="submit"]');
@@ -2898,7 +2815,6 @@ state.role = String(meData.user.role || 'user').toLowerCase();
         submit.dataset.busy = 'true';
         const busyLabel = /password/i.test(initial) ? 'Updating…' : /save/i.test(initial) ? 'Saving…' : 'Submitting…';
         submit.innerHTML = `<span class="button-spinner" aria-hidden="true"></span><span>${busyLabel}</span>`;
-        // Keep the action locked only while the visible request is in flight.
         const restoreSubmit = () => {
           if (!form.isConnected) return;
           const overlay = document.getElementById('globalLoading');
@@ -2915,13 +2831,10 @@ state.role = String(meData.user.role || 'user').toLowerCase();
             delete submit.dataset.busy;
           }
         };
-
-      
         const startedAt = Date.now();
         window.setTimeout(restoreSubmit, 180);
       }, true);
     })();
   </script>
-
 </body>
 </html>
