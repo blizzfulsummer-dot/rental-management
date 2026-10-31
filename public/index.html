@@ -2400,71 +2400,94 @@ async function handleAccountEditor(event) {
       }
     }
 
-    async function handleLogin() {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-      const loginBtn = document.getElementById('loginBtn');
+    
+async function handleLogin() {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const loginBtn = document.getElementById('loginBtn');
 
-      if (!email || !password) {
-        showAlert(loginAlert, 'Email and password are required.', 'error');
-        return;
-      }
+  if (!email || !password) {
+    showAlert(loginAlert, 'Email and password are required.', 'error');
+    return;
+  }
 
-      loginBtn.disabled = true;
-      loginBtn.dataset.originalLabel = loginBtn.dataset.originalLabel || loginBtn.textContent.trim() || 'Sign In';
-      loginBtn.innerHTML = '<span class="button-spinner" aria-hidden="true"></span><span>Signing in…</span>';
-      loginBtn.setAttribute('aria-busy', 'true');
-      clearAlert(loginAlert);
-      document.getElementById('forgotPasswordLink').hidden = true;
+  setButtonBusy(loginBtn, true, 'Signing in…');
+  clearAlert(loginAlert);
+  document.getElementById('forgotPasswordLink').hidden = true;
 
-      try {
-        const loginResponse = await requestJson(`${API_BASE}/api/login`, {
-          method: 'POST',
-          body: JSON.stringify({ email, password })
-        });
+  try {
+    const loginResponse = await requestJson(`${API_BASE}/api/login`, {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    });
 
-        if (!loginResponse.accessToken) {
-          throw new Error('The login response did not include an access token.');
-        }
-        saveAuthTokens(loginResponse.accessToken, loginResponse.refreshToken);
-        const meData = await requestJson(`${API_BASE}/api/me`, {
-          method: 'GET',
-          headers: getAuthHeaders()
-        });
-        if (!meData || !meData.user) throw new Error('Could not load user profile');
-
-        state.profile = meData.user;
-        state.profile.requires_change_password = Number(meData.user.requires_change_password) === 1;
-        state.role = String(meData.user.role || 'user').toLowerCase();
-        state.activeView = 'overview';
-        try {
-          localStorage.setItem('userProfile', JSON.stringify(meData.user));
-          localStorage.setItem('portalRole', state.role);
-        } catch {}
-        userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
-        userRole.textContent = formatRole(state.role);
-
-        renderViewTabs();
-        setActiveScreen('dashboard');
-        if (state.profile.requires_change_password) {
-          document.getElementById('passwordRequiredDialog').showModal();
-        }
-        clearAlert(passwordAlert);
-        await loadDashboardData();
-      } catch (error) {
-        showAlert(loginAlert, error.message || 'Login failed.', 'error');
-        // Only expose recovery after the API explicitly confirms a wrong password
-        // for an active account. Generic/unknown login failures keep it hidden.
-        const recoveryAllowed = error.code === 'INVALID_PASSWORD' && error.emailActive === true;
-        const recoveryLink = document.getElementById('forgotPasswordLink');
-        recoveryLink.hidden = !recoveryAllowed;
-        if (recoveryAllowed) document.getElementById('resetEmail').value = email;
-      } finally {
-        loginBtn.disabled = false;
-        loginBtn.textContent = loginBtn.dataset.originalLabel || 'Sign In';
-        loginBtn.removeAttribute('aria-busy');
-      }
+    if (!loginResponse.success || !loginResponse.accessToken) {
+      throw new Error(loginResponse.error || 'The login response did not include an access token.');
     }
+
+    // Save tokens first. Temporary-password users need the access token
+    // to submit their new password.
+    saveAuthTokens(loginResponse.accessToken, loginResponse.refreshToken);
+
+    // IMPORTANT: Handle temporary-password accounts BEFORE /api/me.
+    if (loginResponse.requiresChangePassword) {
+      state.profile = null;
+      state.role = 'user';
+
+      document.getElementById('passwordRequiredDialog').showModal();
+      return;
+    }
+
+    // Normal account login continues here.
+    const meData = await requestJson(`${API_BASE}/api/me`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+
+    if (!meData || !meData.user) {
+      throw new Error('Could not load user profile');
+    }
+
+    state.profile = meData.user;
+    state.profile.requires_change_password = false;
+    state.role = String(meData.user.role || 'user').toLowerCase();
+    state.activeView = 'overview';
+
+    try {
+      localStorage.setItem('userProfile', JSON.stringify(meData.user));
+      localStorage.setItem('portalRole', state.role);
+    } catch {}
+
+    userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
+    userRole.textContent = formatRole(state.role);
+
+    renderViewTabs();
+    setActiveScreen('dashboard');
+
+    clearAlert(passwordAlert);
+    await loadDashboardData();
+
+  } catch (error) {
+    // Do not leave invalid credentials in storage.
+    clearAuthTokens();
+
+    showAlert(loginAlert, error.message || 'Login failed.', 'error');
+
+    const recoveryAllowed =
+      error.code === 'INVALID_PASSWORD' &&
+      error.emailActive === true;
+
+    const recoveryLink = document.getElementById('forgotPasswordLink');
+    recoveryLink.hidden = !recoveryAllowed;
+
+    if (recoveryAllowed) {
+      document.getElementById('resetEmail').value = email;
+    }
+
+  } finally {
+    setButtonBusy(loginBtn, false);
+  }
+}
 
     async function restoreSession() {
       let refreshToken = '';
