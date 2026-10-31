@@ -1594,67 +1594,129 @@ document.getElementById('copyAccountTempPassword').textContent = 'Copy password'
       dialog.showModal();
     }
 
-    async function handleAccountEditor(event) {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const button = document.getElementById('accountEditorSubmit');
-      const alert = document.getElementById('accountEditorAlert');
-      const values = new FormData(form);
-      const role = String(values.get('role') || '').toLowerCase();
-      const accountId = String(values.get('account_id') || '').trim();
-      const houseSelect = document.getElementById('accountHouse');
-      const houseIds = [...houseSelect.selectedOptions].map(option => Number(option.value)).filter(Boolean);
-      const payload = { role, name: String(values.get('name') || '').trim(), email: String(values.get('email') || '').trim(), house_ids: houseIds };
-      if (!payload.name || !payload.email) return showAlert(alert, 'Name and email are required.', 'error');
-      if (role !== 'owner' && !houseIds.length) return showAlert(alert, 'Assign at least one property to this account.', 'error');
-      if (role === 'tenant') Object.assign(payload, {
-        house_id: houseIds[0], leased_unit: String(values.get('leased_unit') || '').trim(),
-        rent_amount: Number(values.get('rent_amount')), deposit: Number(values.get('deposit') || 0),
-        balance: Number(values.get('balance') || 0), billing_cycle: String(values.get('billing_cycle') || 'monthly'),
-        onboard_date: String(values.get('onboard_date') || '')
-      });
-      setButtonBusy(button, true, 'Saving…');
-      try {
-        if (accountId) {
-          await requestJson(`${API_BASE}/api/accounts/${encodeURIComponent(accountId)}`, { method:'PUT', headers:getAuthHeaders(), body:JSON.stringify(payload) });
-          showAlert(alert, 'Account updated successfully.', 'success');
-        } else {
-          const created = await requestJson(`${API_BASE}/api/provisioning/register`, { method:'POST', headers:getAuthHeaders(), body:JSON.stringify(payload) });
 
-          // Only continue if the backend confirms account creation.
-if (!created.success || !created.user?.id || !created.tempPassword) {
-  throw new Error(created.message || 'Account creation was not confirmed.');
-}
-          showAlert(alert, 'Account created successfully.', 'success');
+async function handleAccountEditor(event) {
+  event.preventDefault();
 
-const fallback = document.getElementById('accountCredentialFallback');
-const passwordField = document.getElementById('accountTempPassword');
-const emailStatus = document.getElementById('accountEmailStatus');
+  const form = event.currentTarget;
+  const button = document.getElementById('accountEditorSubmit');
+  const alert = document.getElementById('accountEditorAlert');
+  const values = new FormData(form);
 
-if (created.tempPassword) {
-  passwordField.value = created.tempPassword;
-  emailStatus.textContent = created.emailSent
-    ? 'Email accepted by Resend. Check the recipient inbox and spam folder.'
-    : 'Email sending failed. Please share the temporary password securely.';
+  const accountId = String(values.get('account_id') || '').trim();
+  const isEdit = Boolean(accountId);
 
-  fallback.hidden = false;
-} else {
-  fallback.hidden = true;
-}
+  // Only read the role when creating a new account.
+  const role = isEdit
+    ? null
+    : String(values.get('role') || '').toLowerCase();
+
+  const houseSelect = document.getElementById('accountHouse');
+  const houseIds = [...houseSelect.selectedOptions]
+    .map(option => Number(option.value))
+    .filter(Boolean);
+
+  const payload = {
+    name: String(values.get('name') || '').trim(),
+    email: String(values.get('email') || '').trim()
+  };
+
+  if (!payload.name || !payload.email) {
+    return showAlert(alert, 'Name and email are required.', 'error');
+  }
+
+  // Build the role-specific payload only during account creation.
+  if (!isEdit) {
+    payload.role = role;
+    payload.house_ids = houseIds;
+
+    if (role !== 'owner' && !houseIds.length) {
+      return showAlert(alert, 'Assign at least one property to this account.', 'error');
+    }
+  } else {
+    // Editing account information: update property assignments
+    // without changing the account's role.
+    payload.house_ids = houseIds;
+
+    if (houseIds.length) {
+      payload.house_id = houseIds[0];
+    }
+  }
+
+  if (role === 'tenant' || (isEdit && form.elements.role.value === 'tenant')) {
+    Object.assign(payload, {
+      leased_unit: String(values.get('leased_unit') || '').trim(),
+      rent_amount: Number(values.get('rent_amount')),
+      deposit: Number(values.get('deposit') || 0),
+      balance: Number(values.get('balance') || 0),
+      billing_cycle: String(values.get('billing_cycle') || 'monthly'),
+      onboard_date: String(values.get('onboard_date') || '')
+    });
+
+    if (!isEdit) {
+      payload.house_id = houseIds[0];
+    }
+  }
+
+  setButtonBusy(button, true, 'Saving…');
+
+  try {
+    if (isEdit) {
+      await requestJson(
+        `${API_BASE}/api/accounts/${encodeURIComponent(accountId)}`,
+        {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload)
         }
-        await loadDashboardData();
-        if (accountId) {
-  window.setTimeout(() => {
-    if (dialogOpen()) {
-      document.getElementById('accountEditorDialog').close();
+      );
+
+      showAlert(alert, 'Account updated successfully.', 'success');
+
+    } else {
+      const created = await requestJson(
+        `${API_BASE}/api/provisioning/register`,
+        {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload)
+        }
+      );
+
+      if (!created.success || !created.user?.id || !created.tempPassword) {
+        throw new Error(created.message || 'Account creation was not confirmed.');
+      }
+
+      showAlert(alert, 'Account created successfully.', 'success');
+
+      const fallback = document.getElementById('accountCredentialFallback');
+      const passwordField = document.getElementById('accountTempPassword');
+      const emailStatus = document.getElementById('accountEmailStatus');
+
+      passwordField.value = created.tempPassword;
+      emailStatus.textContent = created.emailSent
+        ? 'Email accepted by Resend. Check the recipient inbox and spam folder.'
+        : 'Email sending failed. Please share the temporary password securely.';
+
+      fallback.hidden = false;
     }
-  }, 900);
+
+    await loadDashboardData();
+
+    if (isEdit) {
+      window.setTimeout(() => {
+        const dialog = document.getElementById('accountEditorDialog');
+        if (dialog.open) dialog.close();
+      }, 900);
+    }
+
+  } catch (error) {
+    showAlert(alert, error.message || 'Unable to save account.', 'error');
+  } finally {
+    setButtonBusy(button, false);
+  }
 }
-      } catch (error) {
-        showAlert(alert, error.message || 'Unable to save account.', 'error');
-      } finally { setButtonBusy(button, false); }
-      function dialogOpen(){ return document.getElementById('accountEditorDialog').open; }
-    }
+
 
     function renderDeviceList() {
       if (!state.houses.length) {
