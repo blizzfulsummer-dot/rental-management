@@ -6,25 +6,25 @@ export async function sendTemporaryPasswordEmail({
   role,
   tempPassword
 }) {
-  const apiKey = env.EMAIL_SERVICE_KEY;
-  const fromEmail = env.RESEND_FROM_EMAIL;
 
-  if (!apiKey) {
-    throw new Error('EMAIL_SERVICE_KEY is missing');
-  }
+  const fromEmail = env.RESEND_FROM_EMAIL;
 
   if (!fromEmail) {
     throw new Error('RESEND_FROM_EMAIL is missing');
   }
 
-  console.log('[ReMan Email Diagnostic]', {
-    apiKeyConfigured: Boolean(apiKey),
-    apiKeyLength: apiKey.length,
-    apiKeyPrefixValid: apiKey.startsWith('re_'),
-    hasWhitespace: /\s/.test(apiKey),
-    sender: fromEmail,
-    recipientValid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-  });
+  const rawApiKey = env.EMAIL_SERVICE_KEY;
+const apiKey = rawApiKey?.trim();
+
+console.log('[ReMan Email Diagnostic]', {
+  apiKeyConfigured: Boolean(apiKey),
+  rawLength: rawApiKey?.length,
+  trimmedLength: apiKey?.length,
+  rawHasWhitespace: rawApiKey ? /\s/.test(rawApiKey) : null,
+  trimmedHasWhitespace: apiKey ? /\s/.test(apiKey) : null,
+  startsWithRe: apiKey?.startsWith('re_'),
+  senderConfigured: Boolean(env.RESEND_FROM_EMAIL)
+});
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
