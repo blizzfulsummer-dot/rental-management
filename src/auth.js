@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { parseJsonBody, validateEmail, validateId, validateLoginPayload, validatePassword, validateSignupPayload, validateTenantPayload, sanitizeString } from './lib/validation.js';
 import { hashPBKDF2, verifyPBKDF2, verifyLegacy, fakeVerify, arrayBufferToHex, hexToArrayBuffer, generateTempPassword } from './lib/crypto.js';
-
+import { sendTemporaryPasswordEmail } from './lib/email.js';
 
 export async function signup(request, env) {
   const parsed = await parseJsonBody(request);
@@ -135,13 +135,41 @@ export async function signup(request, env) {
       }
     }
 
-    if (role === 'admin') {
+ if (role === 'admin') {
   await env.DB.prepare(
     'UPDATE signup_keys SET used = 1, user_id = ? WHERE id = ?'
   ).bind(userId, registrationCode.id).run();
 }
 
-    return json({ success: true, message: 'User registered successfully', tempPassword });
+let emailSent = false;
+
+if (tempPassword) {
+  try {
+    await sendTemporaryPasswordEmail({
+      env,
+      name: sanitizedName || normalizedEmail,
+      email: normalizedEmail,
+      role,
+      tempPassword
+    });
+
+    emailSent = true;
+  } catch (emailError) {
+    console.error('Temporary password email failed:', emailError);
+  }
+}
+
+return json({
+    success: true,
+    message: emailSent
+      ? 'Account created and credentials emailed successfully'
+      : tempPassword
+        ? 'Account created, but email sending failed. Use the temporary password below.'
+        : 'User registered successfully',
+    emailSent,
+    tempPassword
+  });
+
   } catch (error) {
     console.error('Signup error:', error);
     return json({ error: 'Failed to create user', details: error.message }, 500);
@@ -150,6 +178,8 @@ export async function signup(request, env) {
 
 
 export async function registerProvisionedAccount(request, env, authUser) {
+
+
   if (!authUser?.id || !['admin', 'owner'].includes(String(authUser.role).toLowerCase())) {
     return json({ error: 'You are not authorized to register accounts' }, 403);
   }
@@ -330,17 +360,36 @@ export async function registerProvisionedAccount(request, env, authUser) {
       }
     }
 
+    let emailSent = false;
+
+try {
+  await sendTemporaryPasswordEmail({
+    env,
+    name: nameResult.value,
+    email: normalizedEmail,
+    role,
+    tempPassword
+  });
+
+  emailSent = true;
+} catch (emailError) {
+  console.error('Temporary password email failed:', emailError);
+}
+
     return json({
-      success: true,
-      message: `${role.charAt(0).toUpperCase() + role.slice(1)} account registered successfully`,
-      user: {
-        id: createdUserId,
-        name: nameResult.value,
-        email: normalizedEmail,
-        role
-      },
-      tempPassword
-    });
+  success: true,
+  message: emailSent
+    ? `${role.charAt(0).toUpperCase() + role.slice(1)} account created and credentials emailed successfully`
+    : 'Account created, but email delivery failed. Use the temporary password below.',
+  emailSent,
+  tempPassword,
+  user: {
+    id: createdUserId,
+    name: nameResult.value,
+    email: normalizedEmail,
+    role
+  }
+});
 
   } catch (error) {
     console.error('Account provisioning error:', error);

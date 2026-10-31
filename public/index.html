@@ -950,6 +950,15 @@
       </div>
       <p id="accountEditorHint" class="account-hint">New accounts receive a temporary password and must change it on first sign-in.</p>
       <div id="accountEditorAlert" class="alert" role="status" aria-live="polite"></div>
+      <div id="accountCredentialFallback" hidden style="margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:12px;">
+  <strong>Temporary password</strong>
+  <div style="display:flex;gap:8px;margin-top:8px;">
+    <input id="accountTempPassword" type="text" readonly style="flex:1;min-width:0;" />
+    <button type="button" id="copyAccountTempPassword" class="secondary-btn">Copy</button>
+  </div>
+  <p id="accountEmailStatus" class="account-hint"></p>
+  <p class="account-hint">Share securely. This password expires in 24 hours and must be changed on first login.</p>
+</div>
       <div class="dialog-actions"><button type="button" class="secondary-btn" data-close-account-dialog>Cancel</button><button id="accountEditorSubmit" type="submit" class="primary-btn">Create account</button></div>
     </form>
   </dialog>
@@ -1605,10 +1614,31 @@
           showAlert(alert, 'Account updated successfully.', 'success');
         } else {
           const created = await requestJson(`${API_BASE}/api/provisioning/register`, { method:'POST', headers:getAuthHeaders(), body:JSON.stringify(payload) });
-          showAlert(alert, created.tempPassword ? `Account created. Temporary password: ${created.tempPassword}. Share it securely; the user must change it after signing in.` : 'Account created successfully.', 'success');
+          showAlert(alert, 'Account created successfully.', 'success');
+
+const fallback = document.getElementById('accountCredentialFallback');
+const passwordField = document.getElementById('accountTempPassword');
+const emailStatus = document.getElementById('accountEmailStatus');
+
+if (created.tempPassword) {
+  passwordField.value = created.tempPassword;
+  emailStatus.textContent = created.emailSent
+    ? 'Email accepted by Resend. Check the recipient inbox and spam folder.'
+    : 'Email sending failed. Please share the temporary password securely.';
+
+  fallback.hidden = false;
+} else {
+  fallback.hidden = true;
+}
         }
         await loadDashboardData();
-        window.setTimeout(() => { if (dialogOpen()) document.getElementById('accountEditorDialog').close(); }, 900);
+        if (accountId) {
+  window.setTimeout(() => {
+    if (dialogOpen()) {
+      document.getElementById('accountEditorDialog').close();
+    }
+  }, 900);
+}
       } catch (error) {
         showAlert(alert, error.message || 'Unable to save account.', 'error');
       } finally { setButtonBusy(button, false); }
@@ -2603,6 +2633,19 @@
     document.querySelectorAll('[data-close-account-dialog]').forEach(button => button.addEventListener('click', () => document.getElementById('accountEditorDialog').close()));
     document.getElementById('accountEditorForm').addEventListener('submit', handleAccountEditor);
 
+    document.getElementById('copyAccountTempPassword').addEventListener('click', async () => {
+  const password = document.getElementById('accountTempPassword').value;
+
+  try {
+    await navigator.clipboard.writeText(password);
+    document.getElementById('copyAccountTempPassword').textContent = 'Copied!';
+  } catch {
+    document.getElementById('accountTempPassword').select();
+    document.execCommand('copy');
+    document.getElementById('copyAccountTempPassword').textContent = 'Copied!';
+  }
+});
+
     restoreSession();
 
     document.addEventListener('keydown', (event) => {
@@ -2711,13 +2754,7 @@
           }
         };
 
-        // Skip forms that manage their own loading states.
-      if (
-          form.id === 'loginForm' ||
-          form.id === 'accountEditorForm'
-      ) {
-          return;
-      }
+      
         const startedAt = Date.now();
         window.setTimeout(restoreSubmit, 180);
       }, true);
