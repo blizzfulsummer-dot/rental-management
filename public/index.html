@@ -744,6 +744,10 @@
     .house-card-clickable:hover { transform:translateY(-4px);border-color:#c7d2fe!important;box-shadow:0 16px 32px rgba(15,23,42,.08)!important; }
     .house-card-top { display:flex;justify-content:space-between;align-items:center;margin-bottom:12px; }
     .card-arrow { width:30px;height:30px;display:grid;place-items:center;background:#f1f5f9;border-radius:10px;color:#6366f1;font-weight:800; }
+    .house-card-picture { width:100%;height:148px;display:grid;place-items:center;overflow:hidden;margin:0 0 16px;border:1px solid #e8ecf3;border-radius:13px;background:linear-gradient(135deg,#f1f5f9,#e8edfa);color:#94a3b8; }
+    .house-card-picture img { display:block;width:100%;height:100%;object-fit:cover; }
+    .house-card-picture-placeholder { display:flex;flex-direction:column;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.02em; }
+    .house-card-picture-placeholder svg { width:32px;height:32px;opacity:.8; }
     .house-card-footer { margin-top:auto;padding-top:18px;display:flex;justify-content:space-between;align-items:center;color:#6366f1;font-size:12px;font-weight:750; }
     .device-card-modern { padding:0!important;overflow:hidden; }
     .device-card-head { display:flex;align-items:center;gap:13px;padding:20px 20px 17px; }
@@ -1304,24 +1308,37 @@
         return;
       }
 
-      const cards = state.houses.map(house => `
-        <article class="house-card house-card-clickable" role="button" tabindex="0" aria-label="Open devices for ${escapeHtml(house.name || `House ${house.id}`)}" data-open-house="${house.id}">
-          <div class="house-card-top"><span class="tag">House</span><span class="card-arrow" aria-hidden="true">↗</span></div>
-          <h3>${escapeHtml(house.name || 'Unnamed House')}</h3>
-          <div class="meta">${escapeHtml(house.location || 'No location')}<br /><br />ID: ${escapeHtml(house.house_uid || 'N/A')}</div>
-          <div class="inline-actions">
-            <button class="mini-btn" type="button" data-house-action="devices" data-house-id="${house.id}">View Devices</button>
-            <button class="mini-btn" type="button" data-house-action="access" data-house-id="${house.id}">Manage Access</button>
-          </div>
-          <div class="house-card-footer"><span>Property management</span><span aria-hidden="true">→</span></div>
-        </article>
-      `).join('');
+      const cards = state.houses.map(house => {
+        const rawPicture = house.image_url || house.photo_url || house.image || '';
+        const pictureUrl = typeof rawPicture === 'string' && /^(https?:\/\/|\/)/i.test(rawPicture.trim()) ? rawPicture.trim() : '';
+        const picture = pictureUrl
+          ? `<img src="${escapeHtml(pictureUrl)}" alt="${escapeHtml(house.name || 'Property')} photo" loading="lazy" />`
+          : `<div class="house-card-picture-placeholder" aria-label="No property picture">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+               <span>Property picture</span>
+             </div>`;
+        return `
+          <article class="house-card house-card-clickable" role="button" tabindex="0" aria-label="Open property ${escapeHtml(house.name || `House ${house.id}`)}" data-open-house="${house.id}">
+            <div class="house-card-top"><span class="tag">House</span><span class="card-arrow" aria-hidden="true">↗</span></div>
+            <div class="house-card-picture">${picture}</div>
+            <h3>${escapeHtml(house.name || 'Unnamed House')}</h3>
+            <div class="meta">${escapeHtml(house.location || 'No location')}<br /><br />ID: ${escapeHtml(house.house_uid || 'N/A')}</div>
+            <div class="inline-actions">
+              <button class="mini-btn" type="button" data-house-action="devices" data-house-id="${house.id}">View Devices</button>
+              ${['admin', 'owner'].includes(state.role) ? `<button class="mini-btn" type="button" data-house-action="access" data-house-id="${house.id}">Manage Access</button>` : ''}
+            </div>
+            ${state.activeView === 'property' ? '' : '<div class="house-card-footer"><span>Property management</span><span aria-hidden="true">→</span></div>'}
+          </article>
+        `;
+      }).join('');
 
       mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
 
       const openHouse = card => {
         state.selectedHouseId = Number(card.dataset.openHouse);
-        navigateToView('devices');
+        // On Overview, selecting the card opens Properties; on the Properties
+        // tab, selecting a card opens that property's Devices.
+        navigateToView(state.activeView === 'overview' ? 'property' : 'devices');
       };
       mainPanelContent.querySelectorAll('[data-open-house]').forEach(card => {
         card.addEventListener('click', event => {
@@ -1335,6 +1352,7 @@
       mainPanelContent.querySelectorAll('[data-house-action]').forEach(button => {
         button.addEventListener('click', event => {
           event.stopPropagation();
+          if (button.dataset.houseAction === 'access' && !['admin', 'owner'].includes(state.role)) return;
           state.selectedHouseId = Number(button.dataset.houseId);
           navigateToView(button.dataset.houseAction === 'access' ? 'access' : 'devices');
         });
@@ -2148,13 +2166,12 @@
       }
 
       const cards = state.houses.map(house => `
-        <article class="house-card house-card-clickable" role="button" tabindex="0" aria-label="Open devices for ${escapeHtml(house.name || `House ${house.id}`)}" data-open-house="${house.id}">
+        <article class="house-card house-card-clickable" role="button" tabindex="0" aria-label="Open property ${escapeHtml(house.name || `House ${house.id}`)}" data-open-house="${house.id}">
           <div class="house-card-top"><span class="tag">House</span><span class="card-arrow" aria-hidden="true">↗</span></div>
           <h3>${house.name || 'Assigned House'}</h3>
           <div class="meta">${escapeHtml(house.location || 'No location')}<br />Owner: ${escapeHtml(house.owner_id || 'N/A')}</div>
           <div class="inline-actions">
             <button class="mini-btn" type="button" data-house-id="${house.id}" data-action="select-house">View Devices</button>
-            <button class="mini-btn" type="button" data-house-id="${house.id}" data-action="select-access">Manage Access</button>
           </div>
         </div>
       `).join('');
@@ -2162,7 +2179,7 @@
       mainPanelContent.innerHTML = `<div class="card-grid">${cards}</div>`;
       const openHouse = card => {
         state.selectedHouseId = Number(card.dataset.openHouse);
-        navigateToView('devices');
+        navigateToView('property');
       };
       mainPanelContent.querySelectorAll('[data-open-house]').forEach(card => {
         card.addEventListener('click', event => {
@@ -2173,11 +2190,11 @@
           if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openHouse(card); }
         });
       });
-      mainPanelContent.querySelectorAll('[data-action="select-house"], [data-action="select-access"]').forEach(button => {
+      mainPanelContent.querySelectorAll('[data-action="select-house"]').forEach(button => {
         button.addEventListener('click', event => {
           event.stopPropagation();
           state.selectedHouseId = Number(button.dataset.houseId);
-          navigateToView(button.dataset.action === 'select-access' ? 'access' : 'devices');
+          navigateToView('devices');
         });
       });
     }
