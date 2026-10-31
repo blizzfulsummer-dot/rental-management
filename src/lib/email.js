@@ -7,44 +7,23 @@ export async function sendTemporaryPasswordEmail({
   tempPassword
 }) {
 
-  const fromEmail = env.RESEND_FROM_EMAIL;
+  const rawApiKey = await env.EMAIL_SERVICE_KEY.get();
+  const apiKey = rawApiKey?.trim();
+
+  const fromEmail = await env.RESEND_FROM_EMAIL.get();
+
+  if (!apiKey) {
+    throw new Error('EMAIL_SERVICE_KEY is missing or empty');
+  }
 
   if (!fromEmail) {
-    throw new Error('RESEND_FROM_EMAIL is missing');
+    throw new Error('RESEND_FROM_EMAIL is missing or empty');
   }
 
-  const rawApiKey = env.EMAIL_SERVICE_KEY;
-const apiKey = rawApiKey?.trim();
-
-console.log('[ReMan Email Diagnostic]', {
-  apiKeyConfigured: Boolean(apiKey),
-  rawLength: rawApiKey?.length,
-  trimmedLength: apiKey?.length,
-  rawHasWhitespace: rawApiKey ? /\s/.test(rawApiKey) : null,
-  trimmedHasWhitespace: apiKey ? /\s/.test(apiKey) : null,
-  startsWithRe: apiKey?.startsWith('re_'),
-  senderConfigured: Boolean(env.RESEND_FROM_EMAIL)
-});
-
-const whitespacePositions = [];
-for (let i = 0; i < apiKey.length; i++) {
-  if (/\s/.test(apiKey[i])) {
-    whitespacePositions.push({
-      position: i,
-      characterCode: apiKey.charCodeAt(i)
-    });
+  if (/\s/.test(apiKey)) {
+    throw new Error('EMAIL_SERVICE_KEY contains internal whitespace');
   }
-}
-
-console.log(JSON.stringify({
-  diagnostic: 'REMAN_SECRET_TEST_V2',
-  configured: Boolean(rawApiKey),
-  rawLength: rawApiKey?.length ?? 0,
-  trimmedLength: apiKey.length,
-  whitespaceCount: whitespacePositions.length,
-  whitespacePositions,
-  startsWithRe: apiKey.startsWith('re_')
-}));
+  
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
