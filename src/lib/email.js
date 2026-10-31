@@ -44,9 +44,15 @@ export async function sendTemporaryPasswordEmail({
   const result = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    console.error('Resend delivery failed:', response.status, result);
-    throw new Error('Email delivery failed');
-  }
+  console.error('Resend delivery failed:', {
+    status: response.status,
+    response: result
+  });
+
+  throw new Error(
+    `Resend API error (${response.status}): ${result.message || JSON.stringify(result)}`
+  );
+}
 
   return result;
 }

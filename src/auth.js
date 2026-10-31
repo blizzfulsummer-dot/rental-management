@@ -373,7 +373,7 @@ try {
 
   emailSent = true;
 } catch (emailError) {
-  console.error('Temporary password email failed:', emailError);
+  console.error('Temporary password email failed:', emailError.message);
 }
 
     return json({
