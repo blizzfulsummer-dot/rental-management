@@ -389,8 +389,19 @@ if (accountResetMatch && request.method === 'POST') {
         const isHouseDevicesRoute = /^\/api\/houses\/\d+\/devices$/.test(url.pathname);
 
         if (isHouseDevicesRoute && request.method === 'GET') {
+      
           const houseId = pathParts[2];
-          return withCors(await listHouseDevices(request, env, authUser.user, houseId), allowOrigin);
+          const result = await listHouseDevices(env, authUser.user, houseId);
+
+return withCors(
+  json(
+    result.error
+      ? { error: result.error }
+      : { devices: result.data },
+    result.status
+  ),
+  allowOrigin
+);
         }
 
         if (isHouseDevicesRoute && request.method === 'POST') {
