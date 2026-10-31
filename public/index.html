@@ -1573,6 +1573,12 @@
       document.getElementById('accountEditorSubmit').textContent = isEdit ? 'Save changes' : 'Create account';
       document.getElementById('accountEditorHint').textContent = isEdit ? 'Email and account details will be updated. Passwords and existing device permissions are not changed.' : 'New accounts receive a temporary password and must change it on first sign-in.';
       clearAlert(document.getElementById('accountEditorAlert'));
+      const credentialFallback = document.getElementById('accountCredentialFallback');
+
+credentialFallback.hidden = true;
+document.getElementById('accountTempPassword').value = '';
+document.getElementById('accountEmailStatus').textContent = '';
+document.getElementById('copyAccountTempPassword').textContent = 'Copy password';
       const sync = () => {
         const isTenant = roles.value === 'tenant';
         document.querySelectorAll('#accountEditorForm .account-tenant-only').forEach(field => {
@@ -1614,6 +1620,11 @@
           showAlert(alert, 'Account updated successfully.', 'success');
         } else {
           const created = await requestJson(`${API_BASE}/api/provisioning/register`, { method:'POST', headers:getAuthHeaders(), body:JSON.stringify(payload) });
+
+          // Only continue if the backend confirms account creation.
+if (!created.success || !created.user?.id || !created.tempPassword) {
+  throw new Error(created.message || 'Account creation was not confirmed.');
+}
           showAlert(alert, 'Account created successfully.', 'success');
 
 const fallback = document.getElementById('accountCredentialFallback');
