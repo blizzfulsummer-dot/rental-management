@@ -6,7 +6,7 @@ export async function sendTemporaryPasswordEmail({
   role,
   tempPassword
 }) {
-  if (!env.OTP_EMAIL_SERVICE_API_KEY) {
+  if (!env.EMAIL_SERVICE_KEY) {
     throw new Error('OTP_EMAIL_SERVICE_API_KEY is not configured');
   }
 
@@ -14,10 +14,17 @@ export async function sendTemporaryPasswordEmail({
     throw new Error('RESEND_FROM_EMAIL is not configured');
   }
 
+  console.log('ReMan email configuration:', {
+  apiKeyConfigured: Boolean(env.EMAIL_SERVICE_KEY),
+  sender: env.RESEND_FROM_EMAIL,
+  recipientConfigured: Boolean(email),
+  recipientValid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+});
+
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${env.OTP_EMAIL_SERVICE_API_KEY}`,
+      'Authorization': `Bearer ${env.EMAIL_SERVICE_KEY}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({

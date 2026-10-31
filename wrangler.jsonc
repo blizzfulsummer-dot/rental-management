@@ -24,7 +24,16 @@
 			"binding": "JWT_SCRT",
 			"store_id": "fa13ff7b9ca5473899f48948ce606aa3",
 			"secret_name": "JWT_SCRT"
+		},{
+			"binding": "EMAIL_SERVICE_KEY",
+			"store_id": "fa13ff7b9ca5473899f48948ce606aa3",
+			"secret_name": "EMAIL_SERVICE_KEY"
+		},{
+			"binding": "RESEND_FROM_EMAIL",
+			"store_id": "fa13ff7b9ca5473899f48948ce606aa3",
+			"secret_name": "RESEND_FROM_EMAIL"
 		}
+		
 	],
 	"d1_databases": [
 		{
