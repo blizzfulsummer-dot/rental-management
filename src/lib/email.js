@@ -27,7 +27,6 @@ console.log('[ReMan Email Diagnostic]', {
 });
 
 const whitespacePositions = [];
-
 for (let i = 0; i < apiKey.length; i++) {
   if (/\s/.test(apiKey[i])) {
     whitespacePositions.push({
@@ -37,11 +36,15 @@ for (let i = 0; i < apiKey.length; i++) {
   }
 }
 
-console.log('[ReMan Secret Inspection]', {
-  rawLength: rawApiKey?.length,
-  trimmedLength: apiKey?.length,
-  whitespacePositions
-});
+console.log(JSON.stringify({
+  diagnostic: 'REMAN_SECRET_TEST_V2',
+  configured: Boolean(rawApiKey),
+  rawLength: rawApiKey?.length ?? 0,
+  trimmedLength: apiKey.length,
+  whitespaceCount: whitespacePositions.length,
+  whitespacePositions,
+  startsWithRe: apiKey.startsWith('re_')
+}));
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
