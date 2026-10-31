@@ -75,6 +75,7 @@ async function hashDeviceKey(key) {
     .join('');
 }
 
+
 export async function createTenant(request, env, authUser) {
   if (authUser.role !== 'admin' && authUser.role !== 'owner') {
     return json({ error: 'Forbidden' }, 403);
@@ -84,10 +85,14 @@ export async function createTenant(request, env, authUser) {
   if (!parsed.ok) return json({ error: parsed.error }, 400);
 
   const validation = validateTenantPayload(parsed.data);
-  if (!validation.ok) return json({ error: 'Invalid tenant payload', details: validation.errors }, 400);
+  if (!validation.ok) {
+    return json({
+      error: 'Invalid tenant payload',
+      details: validation.errors
+    }, 400);
+  }
 
   const {
-    user_id,
     balance,
     deposit,
     rent_amount,
@@ -97,20 +102,55 @@ export async function createTenant(request, env, authUser) {
     house_id
   } = parsed.data;
 
-  if (!user_id) {
-    return json({ error: 'Missing required fields' }, 400);
+  const userIdValidation = validateId(parsed.data.user_id);
+
+  if (!userIdValidation.ok) {
+    return json({ error: 'Valid user_id is required' }, 400);
   }
 
   try {
+    // Verify the target account exists and has an eligible role.
+    const tenantUser = await env.DB
+      .prepare(`
+        SELECT id, role
+        FROM users
+        WHERE id = ?
+      `)
+      .bind(userIdValidation.value)
+      .first();
+
+    if (!tenantUser) {
+      return json({ error: 'User not found' }, 404);
+    }
+
+    if (!['user', 'tenant'].includes(tenantUser.role)) {
+      return json({
+        error: 'Only regular users or tenant accounts can be assigned as tenants'
+      }, 400);
+    }
+
+    let validatedHouseId = null;
+
     if (authUser.role === 'owner') {
-      if (!house_id) {
-        return json({ error: 'house_id is required for owner-created tenants' }, 400);
+      const houseIdValidation = validateId(house_id);
+
+      if (!houseIdValidation.ok) {
+        return json({
+          error: 'Valid house_id is required for owner-created tenants'
+        }, 400);
       }
 
-      const hasAccess = await isHouseOwnedByUser(env, authUser.id, house_id);
+      const hasAccess = await isHouseOwnedByUser(
+        env,
+        authUser.id,
+        houseIdValidation.value
+      );
+
       if (!hasAccess) {
         return json({ error: 'Forbidden' }, 403);
       }
+
+      validatedHouseId = houseIdValidation.value;
     }
 
     await env.DB
@@ -120,7 +160,7 @@ export async function createTenant(request, env, authUser) {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .bind(
-        user_id,
+        tenantUser.id,
         balance ?? 0,
         deposit ?? 0,
         rent_amount,
@@ -131,22 +171,31 @@ export async function createTenant(request, env, authUser) {
       )
       .run();
 
-    if (authUser.role === 'owner' && house_id) {
+    // Give the tenant access only to the Owner's property.
+    if (validatedHouseId !== null) {
       await env.DB
         .prepare(`
-          INSERT OR IGNORE INTO user_house_access (user_id, house_id, access_level, created_at)
+          INSERT OR IGNORE INTO user_house_access
+            (user_id, house_id, access_level, created_at)
           VALUES (?, ?, ?, ?)
         `)
-        .bind(user_id, house_id, 'tenant', new Date().toISOString())
+        .bind(
+          tenantUser.id,
+          validatedHouseId,
+          'tenant',
+          new Date().toISOString()
+        )
         .run();
     }
 
     return json({ success: true });
+
   } catch (error) {
     console.error('Create tenant error:', error);
     return json({ error: 'Failed to create tenant' }, 500);
   }
 }
+
 
 export async function listTenants(request, env, authUser) {
   if (authUser.role !== 'admin' && authUser.role !== 'owner') {
@@ -326,13 +375,16 @@ export async function updateTenant(request, env, authUser, tenantId) {
   }
 }
 
+
 export async function deleteTenant(request, env, authUser, tenantId) {
   if (authUser.role !== 'admin' && authUser.role !== 'owner') {
     return json({ error: 'Forbidden' }, 403);
   }
 
   const idValidation = validateId(tenantId);
-  if (!idValidation.ok) return json({ error: 'Invalid tenant ID' }, 400);
+  if (!idValidation.ok) {
+    return json({ error: 'Invalid tenant ID' }, 400);
+  }
 
   try {
     const tenant = await env.DB
@@ -340,10 +392,17 @@ export async function deleteTenant(request, env, authUser, tenantId) {
       .bind(idValidation.value)
       .first();
 
-    if (!tenant) return json({ error: 'Tenant not found' }, 404);
+    if (!tenant) {
+      return json({ error: 'Tenant not found' }, 404);
+    }
 
     if (authUser.role === 'owner') {
-      const isOwner = await isTenantOwnedByUser(env, authUser.id, tenant.user_id);
+      const isOwner = await isTenantOwnedByUser(
+        env,
+        authUser.id,
+        tenant.user_id
+      );
+
       if (!isOwner) {
         return json({ error: 'Forbidden' }, 403);
       }
@@ -354,18 +413,25 @@ export async function deleteTenant(request, env, authUser, tenantId) {
       .bind(idValidation.value)
       .run();
 
-    await env.DB
-      .prepare(`
-        DELETE FROM user_house_access
-        WHERE user_id = ?
-          AND house_id IN (
-            SELECT id FROM houses WHERE owner_id = ?
-          )
-      `)
-      .bind(tenant.user_id, authUser.id)
-      .run();
+    // Only remove property access belonging to this Owner.
+    // Admin deletion preserves access assignments across properties.
+    if (authUser.role === 'owner') {
+      await env.DB
+        .prepare(`
+          DELETE FROM user_house_access
+          WHERE user_id = ?
+            AND house_id IN (
+              SELECT id
+              FROM houses
+              WHERE owner_id = ?
+            )
+        `)
+        .bind(tenant.user_id, authUser.id)
+        .run();
+    }
 
     return json({ success: true });
+
   } catch (error) {
     console.error('Delete tenant error:', error);
     return json({ error: 'Failed to delete tenant' }, 500);
@@ -673,27 +739,64 @@ export async function listHouseDevices(request, env, authUser, houseId) {
 
   try {
     let deviceAccessOnly = false;
-    if (authUser.role !== 'admin') {
-      const ownsHouse = authUser.role === 'owner'
-        && await isHouseOwnedByUser(env, authUser.id, idValidation.value);
-      if (!ownsHouse) {
-        const houseAccess = await env.DB
-          .prepare(`
-            SELECT 1
-            FROM houses h
-            LEFT JOIN user_house_access uha ON uha.house_id = h.id AND uha.user_id = ?
-            LEFT JOIN devices d ON d.house_id = h.id
-            LEFT JOIN user_device_access uda ON uda.device_id = d.id AND uda.user_id = ?
-            WHERE h.id = ? AND (uha.user_id IS NOT NULL OR uda.user_id IS NOT NULL)
-            LIMIT 1
-          `)
-          .bind(authUser.id, authUser.id, idValidation.value)
-          .first();
 
-        if (!houseAccess) return json({ error: 'Forbidden' }, 403);
-        deviceAccessOnly = true;
-      }
-    }
+if (authUser.role === 'owner') {
+  // Owners can access devices only in properties they own.
+  const ownsHouse = await isHouseOwnedByUser(
+    env,
+    authUser.id,
+    idValidation.value
+  );
+
+  if (!ownsHouse) {
+    return json({ error: 'Forbidden' }, 403);
+  }
+
+} else if (authUser.role !== 'admin') {
+  // Preserve existing User/Tenant access rules.
+  const houseAccess = await env.DB
+    .prepare(`
+      SELECT 1
+      FROM houses h
+      LEFT JOIN user_house_access uha
+        ON uha.house_id = h.id
+        AND uha.user_id = ?
+      LEFT JOIN devices d
+        ON d.house_id = h.id
+      LEFT JOIN user_device_access uda
+        ON uda.device_id = d.id
+        AND uda.user_id = ?
+      WHERE h.id = ?
+        AND (
+          uha.user_id IS NOT NULL
+          OR uda.user_id IS NOT NULL
+        )
+      LIMIT 1
+    `)
+    .bind(
+      authUser.id,
+      authUser.id,
+      idValidation.value
+    )
+    .first();
+
+  if (!houseAccess) {
+    return json({ error: 'Forbidden' }, 403);
+  }
+
+  deviceAccessOnly = true;
+
+  // House-level access allows access to all devices in that property.
+  const hasHouseAccess = await userHasHouseAccess(
+    env,
+    authUser.id,
+    idValidation.value
+  );
+
+  if (hasHouseAccess) {
+    deviceAccessOnly = false;
+  }
+}
 
     const rows = await env.DB
       .prepare(deviceAccessOnly
@@ -1076,7 +1179,9 @@ export async function rotateDevicePairingKey(request, env, authUser, deviceId) {
 
 export async function getDevice(request, env, authUser, deviceId) {
   const idValidation = validateId(deviceId);
-  if (!idValidation.ok) return json({ error: 'Invalid device ID' }, 400);
+  if (!idValidation.ok) {
+    return json({ error: 'Invalid device ID' }, 400);
+  }
 
   try {
     const row = await env.DB
@@ -1084,20 +1189,41 @@ export async function getDevice(request, env, authUser, deviceId) {
       .bind(idValidation.value)
       .first();
 
-    if (!row) return json({ error: 'Device not found' }, 404);
+    if (!row) {
+      return json({ error: 'Device not found' }, 404);
+    }
 
-    const canAccess = authUser.role === 'admin'
-      || (authUser.role === 'owner' && await isHouseOwnedByUser(env, authUser.id, row.house_id))
-      || await userHasDeviceAccess(env, authUser.id, row.id);
-    if (!canAccess) return json({ error: 'Forbidden' }, 403);
+    let canAccess = false;
 
-    return json({ device: normalizeDevice(row) });
+    if (authUser.role === 'admin') {
+      canAccess = true;
+    } else if (authUser.role === 'owner') {
+      canAccess = await isHouseOwnedByUser(
+        env,
+        authUser.id,
+        row.house_id
+      );
+    } else {
+      canAccess = await userHasDeviceAccess(
+        env,
+        authUser.id,
+        row.id
+      );
+    }
+
+    if (!canAccess) {
+      return json({ error: 'Forbidden' }, 403);
+    }
+
+    return json({
+      device: normalizeDevice(row)
+    });
+
   } catch (error) {
     console.error('Get device error:', error);
     return json({ error: 'Failed to fetch device' }, 500);
   }
 }
-
 export async function updateDevice(request, env, authUser, deviceId) {
   const idValidation = validateId(deviceId);
   if (!idValidation.ok) return json({ error: 'Invalid device ID' }, 400);
