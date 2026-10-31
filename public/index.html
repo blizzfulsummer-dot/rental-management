@@ -2448,9 +2448,12 @@ async function handleLogin() {
       throw new Error('Could not load user profile');
     }
 
-    state.profile = meData.user;
-    state.profile.requires_change_password = false;
-    state.role = String(meData.user.role || 'user').toLowerCase();
+    state.profile = {
+  ...meData.user,
+  requires_change_password: false
+};
+
+state.role = String(meData.user.role || 'user').toLowerCase();
     state.activeView = 'overview';
 
     try {
