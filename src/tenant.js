@@ -734,9 +734,7 @@ export async function deleteHouse(request, env, authUser, houseId) {
 }
 
 
-
-
-async function listHouseDevices(env, authUser, houseId) {
+export async function listHouseDevices(env, authUser, houseId) {
   const validation = validateId(houseId);
 
   if (!validation.ok) {
