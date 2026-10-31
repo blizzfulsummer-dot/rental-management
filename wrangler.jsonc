@@ -3,6 +3,11 @@
 	"main": "src/worker.js",
 	"workers_dev": true,
 	"compatibility_date": "2026-01-26",
+	"triggers": {
+    "crons": [
+        "*/15 * * * *"
+  	  ]
+	},
 	"observability": {
 		"enabled": true,
 		"logs": {
@@ -24,6 +29,7 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
+			"database_name": "reman",
 			"database_id": "e9d8368d-f999-430a-9cd0-be7e33007c10"
 		}
 	],

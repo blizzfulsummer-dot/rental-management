@@ -160,16 +160,17 @@ export async function issueWebSocketTicket(request, env) {
     const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
 
     // Store ticket in database for validation later
-    try {
-      await env.DB
-        .prepare(`
-          INSERT INTO websocket_tickets 
-          (ticket_id, user_id, house_id, client_type, device_id, expires_at, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `)
-        .bind(ticketId, userId, houseId, clientType, targetDeviceId, expiresAt, new Date().toISOString())
-        .run();
-    } catch (error) {
+    // Replace previous tickets and issue a new one.
+try {
+  await replaceWebSocketTicket(env, {
+    ticketId,
+    userId,
+    houseId,
+    clientType,
+    deviceId: targetDeviceId,
+    expiresAt
+  });
+} catch (error) {
       console.error('Failed to store ticket:', error);
       return json({ error: 'Failed to issue ticket' }, 500);
     }
@@ -231,14 +232,14 @@ export async function issueDeviceWebSocketTicket(request, env) {
     const sessionId = generateUUID();
     const expiresInSeconds = 60;
     const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
-    await env.DB
-      .prepare(`
-        INSERT INTO websocket_tickets
-          (ticket_id, user_id, house_id, client_type, device_id, expires_at, created_at)
-        VALUES (?, ?, ?, 'device', ?, ?, ?)
-      `)
-      .bind(ticket, device.owner_id, device.house_id, device.id, expiresAt, new Date().toISOString())
-      .run();
+    await replaceWebSocketTicket(env, {
+  ticketId: ticket,
+  userId: device.owner_id,
+  houseId: device.house_id,
+  clientType: 'device',
+  deviceId: device.id,
+  expiresAt
+});
 
     return json({
       ticket,
@@ -364,6 +365,60 @@ async function parseJsonBody(request) {
   } catch (error) {
     return { ok: false, error: 'Invalid JSON' };
   }
+}
+
+/**
+ * Replace previous tickets for the same client.
+ * D1 batch executes both statements atomically.
+ */
+async function replaceWebSocketTicket(env, {
+  ticketId,
+  userId,
+  houseId,
+  clientType,
+  deviceId,
+  expiresAt
+}) {
+  const now = new Date().toISOString();
+  const createdAt = now;
+
+  const deleteQuery = clientType === 'device'
+    ? `
+      DELETE FROM websocket_tickets
+      WHERE device_id = ?
+        AND house_id = ?
+        AND client_type = 'device'
+    `
+    : `
+      DELETE FROM websocket_tickets
+      WHERE user_id = ?
+        AND house_id = ?
+        AND device_id = ?
+        AND client_type = 'web'
+    `;
+
+  const deleteStatement = clientType === 'device'
+    ? env.DB.prepare(deleteQuery).bind(deviceId, houseId)
+    : env.DB.prepare(deleteQuery).bind(userId, houseId, deviceId);
+
+  const insertStatement = env.DB.prepare(`
+    INSERT INTO websocket_tickets
+      (ticket_id, user_id, house_id, client_type, device_id, expires_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    ticketId,
+    userId,
+    houseId,
+    clientType,
+    deviceId,
+    expiresAt,
+    createdAt
+  );
+
+  await env.DB.batch([
+    deleteStatement,
+    insertStatement
+  ]);
 }
 
 /**

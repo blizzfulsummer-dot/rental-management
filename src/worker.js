@@ -131,6 +131,27 @@ async function handleHouseRoomWebSocket(request, env, url) {
 export { HouseRoom , DeviceRoom };
 
 export default {
+
+  async scheduled(controller, env, ctx) {
+    const now = new Date().toISOString();
+
+    try {
+      const result = await env.DB.prepare(`
+        DELETE FROM websocket_tickets
+        WHERE consumed = 1
+           OR expires_at <= ?
+      `).bind(now).run();
+
+      console.log('[CRON] WebSocket ticket cleanup completed', {
+        executedAt: now,
+        deletedRows: result.meta?.changes ?? 0
+      });
+    } catch (error) {
+      console.error('[CRON] WebSocket ticket cleanup failed:', error);
+      throw error;
+    }
+  },
+  
   async fetch(request, env) {
     const allowOrigin = getAllowOrigin(request);
 

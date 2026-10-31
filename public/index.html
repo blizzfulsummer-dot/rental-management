@@ -2710,6 +2710,14 @@
             delete submit.dataset.busy;
           }
         };
+
+        // Skip forms that manage their own loading states.
+      if (
+          form.id === 'loginForm' ||
+          form.id === 'accountEditorForm'
+      ) {
+          return;
+      }
         const startedAt = Date.now();
         window.setTimeout(restoreSubmit, 180);
       }, true);
