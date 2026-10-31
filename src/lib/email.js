@@ -6,29 +6,34 @@ export async function sendTemporaryPasswordEmail({
   role,
   tempPassword
 }) {
-  if (!env.EMAIL_SERVICE_KEY) {
-    throw new Error('OTP_EMAIL_SERVICE_API_KEY is not configured');
+  const apiKey = env.EMAIL_SERVICE_KEY;
+  const fromEmail = env.RESEND_FROM_EMAIL;
+
+  if (!apiKey) {
+    throw new Error('EMAIL_SERVICE_KEY is missing');
   }
 
-  if (!env.RESEND_FROM_EMAIL) {
-    throw new Error('RESEND_FROM_EMAIL is not configured');
+  if (!fromEmail) {
+    throw new Error('RESEND_FROM_EMAIL is missing');
   }
 
-  console.log('ReMan email configuration:', {
-  apiKeyConfigured: Boolean(env.EMAIL_SERVICE_KEY),
-  sender: env.RESEND_FROM_EMAIL,
-  recipientConfigured: Boolean(email),
-  recipientValid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-});
+  console.log('[ReMan Email Diagnostic]', {
+    apiKeyConfigured: Boolean(apiKey),
+    apiKeyLength: apiKey.length,
+    apiKeyPrefixValid: apiKey.startsWith('re_'),
+    hasWhitespace: /\s/.test(apiKey),
+    sender: fromEmail,
+    recipientValid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  });
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${env.EMAIL_SERVICE_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM_EMAIL,
+      from: fromEmail,
       to: [email],
       subject: 'Your ReMan account is ready',
       html: `
@@ -48,18 +53,29 @@ export async function sendTemporaryPasswordEmail({
     })
   });
 
-  const result = await response.json().catch(() => ({}));
+  const responseText = await response.text();
+
+  let result;
+  try {
+    result = JSON.parse(responseText);
+  } catch {
+    result = { message: responseText };
+  }
 
   if (!response.ok) {
-  console.error('Resend delivery failed:', {
-    status: response.status,
-    response: result
-  });
+    console.error('[Resend Error]', {
+      status: response.status,
+      response: result
+    });
 
-  throw new Error(
-    `Resend API error (${response.status}): ${result.message || JSON.stringify(result)}`
-  );
-}
+    throw new Error(
+      `Resend API error (${response.status}): ${
+        result.message || JSON.stringify(result)
+      }`
+    );
+  }
+
+  console.log('[ReMan Email] Accepted by Resend:', result.id);
 
   return result;
 }
