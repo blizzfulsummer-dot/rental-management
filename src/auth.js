@@ -135,11 +135,11 @@ export async function signup(request, env) {
       }
     }
 
- if (role === 'admin') {
-  await env.DB.prepare(
-    'UPDATE signup_keys SET used = 1, user_id = ? WHERE id = ?'
-  ).bind(userId, registrationCode.id).run();
-}
+ //if (role === 'admin') {
+ // await env.DB.prepare(
+  //  'UPDATE signup_keys SET used = 1, user_id = ? WHERE id = ?'
+ // ).bind(userId, registrationCode.id).run();
+//}
 
 let emailSent = false;
 
@@ -597,6 +597,139 @@ export async function updateManagedAccount(request, env, authUser, targetUserId)
 }
 
 
+export async function resetManagedAccountPassword(request, env, authUser, targetUserId) {
+  const actorRole = String(authUser?.role || '').toLowerCase();
+
+  if (!['admin', 'owner'].includes(actorRole)) {
+    return json({ error: 'Forbidden' }, 403);
+  }
+
+  const id = Number(targetUserId);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return json({ error: 'Invalid account ID' }, 400);
+  }
+
+  try {
+    const target = await env.DB.prepare(`
+      SELECT id, name, email, role
+      FROM users
+      WHERE id = ?
+    `).bind(id).first();
+
+    if (!target) {
+      return json({ error: 'Account not found' }, 404);
+    }
+
+    const targetRole = String(target.role || '').toLowerCase();
+
+    // Only managed account types can be reset here.
+    if (!['owner', 'tenant', 'user'].includes(targetRole)) {
+      return json({ error: 'This account cannot be reset here' }, 403);
+    }
+
+    // Owners may reset only tenant/user accounts assigned to their properties.
+    if (actorRole === 'owner') {
+      if (targetRole === 'owner') {
+        return json({ error: 'Owners cannot reset other owner accounts' }, 403);
+      }
+
+      const managed = await env.DB.prepare(`
+        SELECT 1
+        FROM user_house_access uha
+        JOIN houses h ON h.id = uha.house_id
+        WHERE uha.user_id = ?
+          AND h.owner_id = ?
+
+        UNION
+
+        SELECT 1
+        FROM user_device_access uda
+        JOIN devices d ON d.id = uda.device_id
+        JOIN houses h ON h.id = d.house_id
+        WHERE uda.user_id = ?
+          AND h.owner_id = ?
+
+        LIMIT 1
+      `).bind(id, authUser.id, id, authUser.id).first();
+
+      if (!managed) {
+        return json({
+          error: 'You can only reset accounts assigned to your properties'
+        }, 403);
+      }
+    }
+
+    const tempPassword = generateTempPassword();
+    const { hash, salt } = await hashPBKDF2(tempPassword);
+
+    const now = new Date().toISOString();
+    const expiration = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    // Update the password and invalidate existing refresh sessions.
+    const results = await env.DB.batch([
+  env.DB.prepare(`
+    UPDATE users
+    SET password_hash = ?,
+        password_salt = ?,
+        requires_change_password = 1,
+        temp_password_expiration = ?
+    WHERE id = ?
+  `).bind(
+    arrayBufferToHex(hash),
+    arrayBufferToHex(salt),
+    expiration,
+    id
+  ),
+
+  env.DB.prepare(`
+    DELETE FROM refresh_tokens
+    WHERE user_id = ?
+  `).bind(id)
+]);
+
+if (!results[0] || results[0].meta?.changes !== 1) {
+  throw new Error('Password reset did not update the account');
+}
+
+    let emailSent = false;
+
+    try {
+      await sendTemporaryPasswordEmail({
+        env,
+        name: target.name || target.email,
+        email: target.email,
+        role: targetRole,
+        tempPassword
+      });
+
+      emailSent = true;
+    } catch (emailError) {
+      console.error('Password reset email failed:', emailError);
+    }
+
+    return json({
+      success: true,
+      message: emailSent
+        ? 'Password reset successfully. Temporary password emailed.'
+        : 'Password reset successfully, but email delivery failed. Use the temporary password below.',
+      emailSent,
+      tempPassword,
+      expiresAt: expiration,
+      user: {
+        id: target.id,
+        name: target.name,
+        email: target.email,
+        role: targetRole
+      }
+    });
+
+  } catch (error) {
+    console.error('Managed account password reset error:', error);
+    return json({ error: 'Failed to reset account password' }, 500);
+  }
+}
+
+
 
 export async function login(request, env) {
   const parsed = await parseJsonBody(request);
@@ -607,7 +740,17 @@ export async function login(request, env) {
 
   try {
     const normalizedEmail = String(parsed.data.email).trim().toLowerCase();
-    const user = await env.DB.prepare('SELECT id, password_hash, password_salt FROM users WHERE email = ?').bind(normalizedEmail).first();
+   const user = await env.DB.prepare(`
+  SELECT
+    id,
+    password_hash,
+    password_salt,
+    requires_change_password,
+    temp_password_expiration
+  FROM users
+  WHERE email = ?
+`).bind(normalizedEmail).first();
+
 
     if (!user) {
       await fakeVerify();
@@ -620,6 +763,19 @@ export async function login(request, env) {
 
     if (!valid) return json({ error: 'Invalid email or password' }, 401);
 
+    if (Number(user.requires_change_password) === 1) {
+  const expiration = user.temp_password_expiration
+    ? Date.parse(user.temp_password_expiration)
+    : NaN;
+
+  if (!Number.isFinite(expiration) || expiration <= Date.now()) {
+    return json({
+      error: 'Your temporary password has expired. Please contact your administrator or property owner to reset it.',
+      code: 'TEMP_PASSWORD_EXPIRED'
+    }, 403);
+  }
+}
+
     const accessToken = await new SignJWT({ sub: user.id })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
@@ -629,7 +785,12 @@ export async function login(request, env) {
     const refreshTokenRaw = crypto.randomUUID();
     await env.DB.prepare('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)').bind(user.id, refreshTokenRaw, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()).run();
 
-    return json({ success: true, accessToken, refreshToken: refreshTokenRaw });
+    return json({
+  success: true,
+  accessToken,
+  refreshToken: refreshTokenRaw,
+  requiresChangePassword: Number(user.requires_change_password) === 1
+});
   } catch (error) {
     console.error('Login error:', error);
     return json({ error: 'Authentication failed' }, 500);
@@ -666,6 +827,11 @@ export async function updatePassword(request, env) {
       SET password_hash = ?, password_salt = ?, requires_change_password = 0, temp_password_expiration = NULL
       WHERE id = ?
     `).bind(arrayBufferToHex(derivedBits), arrayBufferToHex(salt), user.id).run();
+
+    await env.DB.prepare(`
+  DELETE FROM refresh_tokens
+  WHERE user_id = ?
+`).bind(user.id).run();
 
     return json({ success: true, message: 'Password updated successfully' });
   } catch (error) {
@@ -719,8 +885,24 @@ export async function resetPassword(request, env) {
     if (!reset || reset.used || new Date(reset.expires_at) < new Date()) return json({ error: 'Invalid or expired token' }, 400);
 
     const { hash: derivedBits, salt } = await hashPBKDF2(newPassword);
-    await env.DB.prepare('UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?').bind(arrayBufferToHex(derivedBits), arrayBufferToHex(salt), payload.sub).run();
-    await env.DB.prepare('UPDATE password_resets SET used = 1 WHERE id = ?').bind(reset.id).run();
+    await env.DB.prepare(`
+  UPDATE users
+  SET password_hash = ?,
+      password_salt = ?,
+      requires_change_password = 0,
+      temp_password_expiration = NULL
+  WHERE id = ?
+`).bind(
+  arrayBufferToHex(derivedBits),
+  arrayBufferToHex(salt),
+  payload.sub
+).run();
+
+await env.DB.prepare(`
+  DELETE FROM refresh_tokens
+  WHERE user_id = ?
+`).bind(payload.sub).run();
+await env.DB.prepare('UPDATE password_resets SET used = 1 WHERE id = ?').bind(reset.id).run();
 
     return json({ success: true, message: 'Password has been reset successfully' });
   } catch (error) {
@@ -776,8 +958,26 @@ export async function verifyJwt(request, env) {
   }
 
   try {
-    const user = await env.DB.prepare('SELECT id, email, role, name, requires_change_password FROM users WHERE id = ?').bind(payload.sub).first();
+    const user = await env.DB.prepare('SELECT id, email, role, name, requires_change_password, temp_password_expiration FROM users WHERE id = ?').bind(payload.sub).first();
     if (!user) return json({ error: 'User not found' }, 401);
+
+    if (Number(user.requires_change_password) === 1) {
+  const expiration = user.temp_password_expiration
+    ? Date.parse(user.temp_password_expiration)
+    : NaN;
+
+  if (!Number.isFinite(expiration) || expiration <= Date.now()) {
+    return json({
+      error: 'Your temporary password has expired. Contact your administrator or property owner.',
+      code: 'TEMP_PASSWORD_EXPIRED'
+    }, 403);
+  }
+
+  return json({
+    error: 'You must change your temporary password before accessing this resource.',
+    code: 'PASSWORD_CHANGE_REQUIRED'
+  }, 403);
+}
 
     const assignedHouses = await getAssignedHouses(env, user);
     const assignedHouse = assignedHouses[0] || null;
@@ -804,8 +1004,38 @@ export async function refreshToken(request, env) {
   if (!refreshToken) return json({ error: 'No refresh token' }, 400);
 
   try {
-    const row = await env.DB.prepare('SELECT user_id, expires_at FROM refresh_tokens WHERE token = ?').bind(refreshToken).first();
-    if (!row || new Date(row.expires_at) < new Date()) return json({ error: 'Invalid or expired refresh token' }, 401);
+    const row = await env.DB.prepare(`
+  SELECT user_id, expires_at
+  FROM refresh_tokens
+  WHERE token = ?
+`).bind(refreshToken).first();
+
+if (!row || new Date(row.expires_at) <= new Date()) {
+  return json({ error: 'Invalid or expired refresh token' }, 401);
+}
+
+const user = await env.DB.prepare(`
+  SELECT requires_change_password, temp_password_expiration
+  FROM users
+  WHERE id = ?
+`).bind(row.user_id).first();
+
+if (!user) {
+  return json({ error: 'User not found' }, 401);
+}
+
+if (Number(user.requires_change_password) === 1) {
+  const expiration = user.temp_password_expiration
+    ? Date.parse(user.temp_password_expiration)
+    : NaN;
+
+  if (!Number.isFinite(expiration) || expiration <= Date.now()) {
+    return json({
+      error: 'Your temporary password has expired. Please contact your administrator or property owner.',
+      code: 'TEMP_PASSWORD_EXPIRED'
+    }, 403);
+  }
+}
 
     const newAccessToken = await new SignJWT({ sub: row.user_id }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('15m').sign(getSecret(env));
     return json({ success: true, accessToken: newAccessToken });
@@ -817,22 +1047,62 @@ export async function refreshToken(request, env) {
 
 export async function getAuthUser(request, env) {
   const auth = request.headers.get('Authorization');
-  if (!auth) return { error: 'Authorization header missing', status: 401 };
-  if (!auth.startsWith('Bearer ')) return { error: 'Invalid Authorization format', status: 401 };
 
-  const token = auth.slice(7);
+  if (!auth) {
+    return { error: 'Authorization header missing', status: 401 };
+  }
+
+  if (!auth.startsWith('Bearer ')) {
+    return { error: 'Invalid Authorization format', status: 401 };
+  }
+
   try {
     let payload;
+
     try {
-      ({ payload } = await jwtVerify(token, getSecret(env)));
+      ({ payload } = await jwtVerify(auth.slice(7), getSecret(env)));
     } catch {
       return { error: 'Invalid or expired token', status: 401 };
     }
 
-    const user = await env.DB.prepare('SELECT id, email, role, name FROM users WHERE id = ?').bind(payload.sub).first();
-    if (!user) return { error: 'User not found', status: 404 };
+    const user = await env.DB.prepare(`
+      SELECT
+        id,
+        email,
+        role,
+        name,
+        requires_change_password,
+        temp_password_expiration
+      FROM users
+      WHERE id = ?
+    `).bind(payload.sub).first();
+
+    if (!user) {
+      return { error: 'User not found', status: 404 };
+    }
+
+    if (Number(user.requires_change_password) === 1) {
+      const expiration = user.temp_password_expiration
+        ? Date.parse(user.temp_password_expiration)
+        : NaN;
+
+      if (!Number.isFinite(expiration) || expiration <= Date.now()) {
+        return {
+          error: 'Your temporary password has expired. Contact your administrator or property owner.',
+          status: 403,
+          code: 'TEMP_PASSWORD_EXPIRED'
+        };
+      }
+
+      return {
+        error: 'You must change your temporary password before accessing this resource.',
+        status: 403,
+        code: 'PASSWORD_CHANGE_REQUIRED'
+      };
+    }
 
     return { user };
+
   } catch (error) {
     console.error('Auth user error:', error);
     return { error: 'Authentication failed', status: 500 };

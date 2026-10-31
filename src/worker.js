@@ -19,7 +19,7 @@ import {
   updateHouse,
   updateTenant
 } from './tenant.js';
-import { getAuthUser, login, refreshToken, requestReset, resetPassword, signup, updatePassword, verifyJwt, registerProvisionedAccount,listManagedAccounts, updateManagedAccount } from './auth.js';
+import { getAuthUser, login, refreshToken, requestReset, resetPassword, signup, updatePassword, verifyJwt, registerProvisionedAccount,listManagedAccounts, updateManagedAccount,resetManagedAccountPassword } from './auth.js';
 import { createRateLimiter } from './lib/rateLimit.js';
 import { issueDeviceWebSocketTicket, issueWebSocketTicket, validateWebSocketTicket } from './lib/websocketTicket.js';
 import { HouseRoom } from './houseRoom.js';
@@ -151,7 +151,7 @@ export default {
       throw error;
     }
   },
-  
+
   async fetch(request, env) {
     const allowOrigin = getAllowOrigin(request);
 
@@ -262,8 +262,15 @@ export default {
       }
 
       const authUser = await getAuthUser(request, env);
-      if (authUser.error) return withCors(json({ error: authUser.error }, authUser.status || 401), allowOrigin);
-
+      if (authUser.error) {
+  return withCors(
+    json({
+      error: authUser.error,
+      ...(authUser.code ? { code: authUser.code } : {})
+    }, authUser.status || 401),
+    allowOrigin
+  );
+}
       if (
   url.pathname === '/api/provisioning/register' &&
   request.method === 'POST'
@@ -289,6 +296,22 @@ export default {
           allowOrigin
         );
       }
+
+      const accountResetMatch = url.pathname.match(
+  /^\/api\/accounts\/(\d+)\/reset-password$/
+);
+
+if (accountResetMatch && request.method === 'POST') {
+  return withCors(
+    await resetManagedAccountPassword(
+      request,
+      env,
+      authUser.user,
+      accountResetMatch[1]
+    ),
+    allowOrigin
+  );
+}
 
       if (url.pathname === '/api/houses' && request.method === 'POST') {
         return withCors(await createHouse(request, env, authUser.user), allowOrigin);
