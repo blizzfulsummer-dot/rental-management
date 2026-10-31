@@ -2550,33 +2550,96 @@ async function handleLogin() {
     }
 
     async function handlePasswordUpdate(event) {
-      event.preventDefault();
-      const oldPassword = document.getElementById('oldPassword').value;
-      const newPassword = document.getElementById('newPassword').value;
+  event.preventDefault();
 
-      if (!oldPassword || !newPassword) {
-        showAlert(passwordAlert, 'Both current and new password are required.', 'error');
-        return;
-      }
+  const oldPassword = document.getElementById('oldPassword').value;
+  const newPassword = document.getElementById('newPassword').value;
 
-      try {
-        const result = await requestJson(`${API_BASE}/api/update_password`, {
-          method: 'POST',
-          body: JSON.stringify({
-            token: state.jwt,
-            oldPassword,
-            newPassword
-          })
-        });
+  if (!oldPassword || !newPassword) {
+    showAlert(passwordAlert, 'Both current and new password are required.', 'error');
+    return;
+  }
 
-        showAlert(passwordAlert, result.message || 'Password updated successfully.', 'success');
-        document.getElementById('oldPassword').value = '';
-        document.getElementById('newPassword').value = '';
-      } catch (error) {
-        showAlert(passwordAlert, error.message || 'Password update failed.', 'error');
-      }
+  if (newPassword.length < 8) {
+    showAlert(passwordAlert, 'New password must be at least 8 characters.', 'error');
+    return;
+  }
+
+  const submitBtn = event.submitter || event.target.querySelector('[type="submit"]');
+
+  try {
+    if (submitBtn) setButtonBusy(submitBtn, true, 'Updating password…');
+
+    clearAlert(passwordAlert);
+
+    // Use the saved access token.
+    const token = localStorage.getItem('accessToken');
+
+    if (!token) {
+      throw new Error('Your login session has expired. Please sign in again.');
     }
 
+    const result = await requestJson(`${API_BASE}/api/update_password`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        token,
+        oldPassword,
+        newPassword
+      })
+    });
+
+    showAlert(
+      passwordAlert,
+      result.message || 'Password updated successfully.',
+      'success'
+    );
+
+    document.getElementById('oldPassword').value = '';
+    document.getElementById('newPassword').value = '';
+
+    // Load the normal user profile now that the temporary password restriction is cleared.
+    const meData = await requestJson(`${API_BASE}/api/me`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (!meData?.user) {
+      throw new Error('Password updated, but your user profile could not be loaded. Please sign in again.');
+    }
+
+    state.profile = meData.user;
+    state.profile.requires_change_password = false;
+    state.role = String(meData.user.role || 'user').toLowerCase();
+    state.activeView = 'overview';
+
+    localStorage.setItem('userProfile', JSON.stringify(meData.user));
+    localStorage.setItem('portalRole', state.role);
+
+    userDisplayName.textContent = meData.user.name || meData.user.email || 'User';
+    userRole.textContent = formatRole(state.role);
+
+    renderViewTabs();
+
+    // Close the mandatory password-change dialog.
+    const dialog = document.getElementById('passwordRequiredDialog');
+    if (dialog?.open) dialog.close();
+
+    setActiveScreen('dashboard');
+    clearAlert(passwordAlert);
+
+    await loadDashboardData();
+
+  } catch (error) {
+    showAlert(passwordAlert, error.message || 'Password update failed.', 'error');
+  } finally {
+    if (submitBtn) setButtonBusy(submitBtn, false);
+  }
+}
     async function handleRequiredPasswordUpdate(event) {
       event.preventDefault();
       const currentPassword = document.getElementById('requiredCurrentPassword').value;
