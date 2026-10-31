@@ -743,6 +743,9 @@ export async function login(request, env) {
    const user = await env.DB.prepare(`
   SELECT
     id,
+    name,
+    email,
+    role,
     password_hash,
     password_salt,
     requires_change_password,
@@ -750,7 +753,6 @@ export async function login(request, env) {
   FROM users
   WHERE email = ?
 `).bind(normalizedEmail).first();
-
 
     if (!user) {
       await fakeVerify();

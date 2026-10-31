@@ -22,37 +22,6 @@ CREATE TABLE logs (
   action TEXT,
   timestamp TEXT DEFAULT CURRENT_TIMESTAMP
 );
-CREATE TABLE billing (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tenant_id INTEGER NOT NULL,          -- links to tenants table
-    user_id INTEGER NOT NULL,            -- optional: who created the billing record
-    amount REAL NOT NULL,                -- amount billed
-    status TEXT DEFAULT 'pending',       -- e.g., pending, paid, failed
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    due_date DATETIME,
-    paid_at DATETIME,
-
-    -- Foreign keys
-    FOREIGN KEY (tenant_id)
-        REFERENCES tenants(id)
-        ON DELETE CASCADE,
-    FOREIGN KEY (user_id)
-        REFERENCES users(id)
-        ON DELETE SET NULL
-);
-CREATE TABLE payments (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,   -- unique payment record
-  tenant_id INTEGER NOT NULL,             -- which tenant made the payment
-  billing_id INTEGER,                     -- optional link to a specific invoice
-  amount INTEGER NOT NULL,          -- payment amount in cents
-  paid_at DATETIME DEFAULT CURRENT_TIMESTAMP,  -- payment timestamp
-  method TEXT DEFAULT 'cash',             -- optional: cash, card, bank transfer, etc.
-  note TEXT,                              -- optional note or description
-
-  -- foreign key references
-  FOREIGN KEY (tenant_id) REFERENCES "tenants"(id) ON DELETE CASCADE,
-  FOREIGN KEY (billing_id) REFERENCES billing(id) ON DELETE SET NULL
-);
 CREATE TABLE refresh_tokens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
@@ -101,39 +70,6 @@ CREATE TABLE d1_migrations(
 		name       TEXT UNIQUE,
 		applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
-CREATE TABLE password_resets (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  token TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  used INTEGER DEFAULT 0,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id)
-);
-CREATE TABLE user_house_access (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  house_id INTEGER NOT NULL,
-  access_level TEXT DEFAULT 'viewer',
-  created_at TEXT NOT NULL,
-  UNIQUE(user_id, house_id),
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(house_id) REFERENCES houses(id)
-);
-CREATE TABLE websocket_tickets (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  ticket_id TEXT UNIQUE NOT NULL,
-  user_id INTEGER NOT NULL,
-  house_id INTEGER NOT NULL,
-  client_type TEXT DEFAULT 'web',
-  device_id INTEGER,
-  expires_at TEXT NOT NULL,
-  consumed INTEGER DEFAULT 0,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(house_id) REFERENCES houses(id),
-  FOREIGN KEY(device_id) REFERENCES devices(id)
-);
 CREATE TABLE IF NOT EXISTS "users" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     role TEXT CHECK(role IN ('admin','owner','user','tenant')),
@@ -159,20 +95,75 @@ CREATE TABLE device_fingerprint_enrollments (
   FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE TABLE billing (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL,
+    user_id INTEGER,
+    amount REAL NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    due_date DATETIME,
+    paid_at DATETIME,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE TABLE payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL,
+    billing_id INTEGER,
+    amount INTEGER NOT NULL,
+    paid_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    method TEXT DEFAULT 'cash',
+    note TEXT,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (billing_id) REFERENCES billing(id) ON DELETE SET NULL
+);
+CREATE TABLE password_resets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE TABLE user_house_access (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    house_id INTEGER NOT NULL,
+    access_level TEXT DEFAULT 'viewer',
+    created_at TEXT NOT NULL,
+    UNIQUE (user_id, house_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (house_id) REFERENCES houses(id) ON DELETE CASCADE
+);
+CREATE TABLE websocket_tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id TEXT UNIQUE NOT NULL,
+    user_id INTEGER NOT NULL,
+    house_id INTEGER NOT NULL,
+    client_type TEXT DEFAULT 'web',
+    device_id INTEGER,
+    expires_at TEXT NOT NULL,
+    consumed INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (house_id) REFERENCES houses(id) ON DELETE CASCADE,
+    FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+);
 DELETE FROM sqlite_sequence;
 CREATE INDEX idx_houses_owner_id ON houses(owner_id);
 CREATE INDEX idx_devices_house_id ON devices(house_id);
-CREATE INDEX idx_user_house_access_user_id ON user_house_access(user_id);
-CREATE INDEX idx_user_house_access_house_id ON user_house_access(house_id);
-CREATE INDEX idx_websocket_tickets_ticket_id ON websocket_tickets(ticket_id);
-CREATE INDEX idx_websocket_tickets_expires ON websocket_tickets(expires_at);
 CREATE UNIQUE INDEX idx_houses_house_uid
 ON houses(house_uid);
 CREATE INDEX idx_tenants_room_id
 ON tenants(room_id);
-CREATE INDEX idx_user_house_access_user_house
-ON user_house_access(user_id, house_id);
 CREATE UNIQUE INDEX idx_users_email
 ON users(email);
 CREATE INDEX idx_fingerprint_enrollments_device_status
   ON device_fingerprint_enrollments(device_id, status, enrollment_pending);
+CREATE INDEX idx_user_house_access_user_id ON user_house_access(user_id);
+CREATE INDEX idx_user_house_access_house_id ON user_house_access(house_id);
+CREATE INDEX idx_user_house_access_user_house ON user_house_access(user_id, house_id);
+CREATE INDEX idx_websocket_tickets_ticket_id ON websocket_tickets(ticket_id);
+CREATE INDEX idx_websocket_tickets_expires ON websocket_tickets(expires_at);
