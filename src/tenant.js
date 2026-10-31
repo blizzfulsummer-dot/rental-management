@@ -733,87 +733,84 @@ export async function deleteHouse(request, env, authUser, houseId) {
   }
 }
 
-export async function listHouseDevices(request, env, authUser, houseId) {
-  const idValidation = validateId(houseId);
-  if (!idValidation.ok) return json({ error: 'Invalid house ID' }, 400);
 
-  try {
-    let deviceAccessOnly = false;
 
-if (authUser.role === 'owner') {
-  // Owners can access devices only in properties they own.
-  const ownsHouse = await isHouseOwnedByUser(
-    env,
-    authUser.id,
-    idValidation.value
-  );
 
-  if (!ownsHouse) {
-    return json({ error: 'Forbidden' }, 403);
+async function listHouseDevices(env, authUser, houseId) {
+  const validation = validateId(houseId);
+
+  if (!validation.ok) {
+    return { status: 400, error: 'Invalid house ID' };
   }
 
-} else if (authUser.role !== 'admin') {
-  // Preserve existing User/Tenant access rules.
-  const houseAccess = await env.DB
-    .prepare(`
-      SELECT 1
-      FROM houses h
-      LEFT JOIN user_house_access uha
-        ON uha.house_id = h.id
-        AND uha.user_id = ?
-      LEFT JOIN devices d
-        ON d.house_id = h.id
-      LEFT JOIN user_device_access uda
-        ON uda.device_id = d.id
-        AND uda.user_id = ?
-      WHERE h.id = ?
-        AND (
-          uha.user_id IS NOT NULL
-          OR uda.user_id IS NOT NULL
-        )
-      LIMIT 1
-    `)
-    .bind(
-      authUser.id,
-      authUser.id,
-      idValidation.value
-    )
-    .first();
+  const id = validation.value;
 
-  if (!houseAccess) {
-    return json({ error: 'Forbidden' }, 403);
+  // Admin: all devices.
+  if (authUser.role === 'admin') {
+    const devices = await env.DB.prepare(`
+      SELECT *
+      FROM devices
+      WHERE house_id = ?
+      ORDER BY created_at DESC
+    `).bind(id).all();
+
+    return { status: 200, data: devices.results || [] };
   }
 
-  deviceAccessOnly = true;
+  // Owner: all devices in their own property.
+  if (authUser.role === 'owner') {
+    const house = await env.DB.prepare(`
+      SELECT id
+      FROM houses
+      WHERE id = ? AND owner_id = ?
+    `).bind(id, authUser.id).first();
 
-  // House-level access allows access to all devices in that property.
-  const hasHouseAccess = await userHasHouseAccess(
-    env,
-    authUser.id,
-    idValidation.value
-  );
+    if (!house) {
+      return { status: 403, error: 'Forbidden' };
+    }
 
-  if (hasHouseAccess) {
-    deviceAccessOnly = false;
+    const devices = await env.DB.prepare(`
+      SELECT *
+      FROM devices
+      WHERE house_id = ?
+      ORDER BY created_at DESC
+    `).bind(id).all();
+
+    return { status: 200, data: devices.results || [] };
   }
-}
 
-    const rows = await env.DB
-      .prepare(deviceAccessOnly
-        ? `SELECT d.*
-           FROM devices d
-           JOIN user_device_access uda ON uda.device_id = d.id
-           WHERE d.house_id = ? AND uda.user_id = ?
-           ORDER BY d.created_at DESC`
-        : 'SELECT * FROM devices WHERE house_id = ? ORDER BY created_at DESC')
-      .bind(...(deviceAccessOnly ? [idValidation.value, authUser.id] : [idValidation.value]))
-      .all();
+  // Regular users and tenants must have property access
+  // or explicit access to at least one device in the property.
+  const access = await env.DB.prepare(`
+    SELECT 1
+    FROM user_house_access
+    WHERE user_id = ? AND house_id = ?
 
-    return json({ devices: (rows.results || []).map(normalizeDevice) });
-  } catch (error) {
-    console.error('List devices error:', error);
-    return json({ error: 'Failed to fetch devices' }, 500);
+    UNION
+
+    SELECT 1
+    FROM user_device_access uda
+    JOIN devices d ON d.id = uda.device_id
+    WHERE uda.user_id = ? AND d.house_id = ?
+
+    LIMIT 1
+  `).bind(authUser.id, id, authUser.id, id).first();
+
+  if (!access) {
+    return { status: 403, error: 'Forbidden' };
   }
+
+  // Only explicitly authorized devices are returned.
+  const devices = await env.DB.prepare(`
+    SELECT d.*
+    FROM devices d
+    JOIN user_device_access uda ON uda.device_id = d.id
+    WHERE d.house_id = ?
+      AND uda.user_id = ?
+    ORDER BY d.created_at DESC
+  `).bind(id, authUser.id).all();
+
+  return { status: 200, data: devices.results || [] };
 }
 
 export async function listProvisionableUsers(request, env, authUser) {
