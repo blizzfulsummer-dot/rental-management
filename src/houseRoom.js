@@ -42,15 +42,20 @@ export class HouseRoom {
       try {
         const attachment = ws.deserializeAttachment();
 
-        if (
-          attachment &&
-          typeof attachment.sessionId === "string"
-        ) {
-          this.sessions.set(attachment.sessionId, {
+        if (attachment &&typeof attachment.sessionId === "string"){
+            // Restore houseId after Durable Object reconstruction.
+          const attachmentHouseId = Number(attachment.houseId);
+
+          if (Number.isInteger(attachmentHouseId) && attachmentHouseId > 0) {
+              this.houseId = attachmentHouseId;
+            }
+
+            this.sessions.set(attachment.sessionId, {
             ...attachment,
             ws
-          });
-        }
+            });
+          }
+          
       } catch (error) {
         console.error(
           `[HouseRoom ${this.houseId}] Failed to restore WebSocket attachment:`,
