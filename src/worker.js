@@ -162,33 +162,54 @@ export { HouseRoom , DeviceRoom };
 export default {
 
   async scheduled(controller, env, ctx) {
-    const now = new Date().toISOString();
+  const now = new Date().toISOString();
 
-    try {
-      const result = await env.DB.prepare(`
-        DELETE FROM websocket_tickets
-        WHERE consumed = 1
-           OR expires_at <= ?
-      `).bind(now).run();
+  // 1. Clean expired and consumed WebSocket tickets
+  try {
+    const result = await env.DB.prepare(`
+      DELETE FROM websocket_tickets
+      WHERE consumed = 1
+         OR expires_at <= ?
+    `).bind(now).run();
 
-      console.log('[CRON] WebSocket ticket cleanup completed', {
-        executedAt: now,
-        deletedRows: result.meta?.changes ?? 0
-      });
+    console.log('[CRON] WebSocket ticket cleanup completed', {
+      executedAt: now,
+      deletedRows: result.meta?.changes ?? 0
+    });
+  } catch (error) {
+    console.error('[CRON] WebSocket ticket cleanup failed:', error);
+  }
 
-      const logCleanup = await env.DB.prepare(`
-        DELETE FROM logs
-        WHERE datetime(timestamp) < datetime('now', '-90 days')
-      `).run();
-      console.log('[CRON] Audit log retention completed', {
-        executedAt: now,
-        deletedRows: logCleanup.meta?.changes ?? 0
-      });
-    } catch (error) {
-      console.error('[CRON] Scheduled cleanup failed:', error);
-      throw error;
-    }
-  },
+  // 2. Clean expired refresh tokens
+  try {
+    const result = await env.DB.prepare(`
+      DELETE FROM refresh_tokens
+      WHERE expires_at <= ?
+    `).bind(now).run();
+
+    console.log('[CRON] Refresh token cleanup completed', {
+      executedAt: now,
+      deletedRows: result.meta?.changes ?? 0
+    });
+  } catch (error) {
+    console.error('[CRON] Refresh token cleanup failed:', error);
+  }
+
+  // 3. Retain audit logs for 90 days
+  try {
+    const result = await env.DB.prepare(`
+      DELETE FROM logs
+      WHERE datetime(timestamp) < datetime('now', '-90 days')
+    `).run();
+
+    console.log('[CRON] Audit log retention completed', {
+      executedAt: now,
+      deletedRows: result.meta?.changes ?? 0
+    });
+  } catch (error) {
+    console.error('[CRON] Audit log cleanup failed:', error);
+  }
+},
 
   async fetch(request, env) {
     const allowOrigin = getAllowOrigin(request);
