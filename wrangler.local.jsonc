@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "reman-local",
+  "main": "src/worker.js",
+  "workers_dev": true,
+  "compatibility_date": "2026-01-26",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": false
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "reman-local",
+      "database_id": "00000000-0000-4000-8000-000000000001"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "HOUSE_ROOM", "class_name": "HouseRoom" },
+      { "name": "DEVICE_ROOM", "class_name": "DeviceRoom" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["HouseRoom"] },
+    { "tag": "v2", "new_sqlite_classes": ["DeviceRoom"] }
+  ]
+}

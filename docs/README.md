@@ -21,7 +21,7 @@ Complete documentation for the Rental Management API project.
    - Rate limiting
    - CORS configuration
 
-3. **[Architecture](03-ARCHITECTURE.md)** - System design and module overview
+3. **[Architecture](ARCHITECTURE.md)** - Current system design and module map
    - Architecture diagram
    - Module breakdown
    - Data flows
@@ -103,7 +103,7 @@ Complete documentation for the Rental Management API project.
 → Check [API Reference](02-API.md)
 
 **Understanding the code?**
-→ Review [Architecture](03-ARCHITECTURE.md)
+→ Review [Architecture](ARCHITECTURE.md)
 
 **Contributing code?**
 → Follow [Contributing Guide](07-CONTRIBUTING.md)

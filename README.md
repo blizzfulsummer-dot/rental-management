@@ -47,6 +47,8 @@ npm install
 npm run dev
 ```
 
+To try the different account types against your **local** D1 database, run `npm run db:seed:local`, then sign in using the credentials documented in [Getting Started](docs/01-GETTING_STARTED.md). The seeded password for all four demo accounts is `DemoPass123!`. This command is local-only and must not be changed to use a remote database.
+
 The worker will:
 - Start on `http://localhost:8787`
 - Auto-apply database migrations
@@ -61,8 +63,8 @@ http://localhost:8787/
 
 Login with demo credentials:
 ```
-Email: admin@example.com
-Password: AdminPass123!
+Email: admin.demo@example.test
+Password: DemoPass123!
 ```
 
 ### 3. Test with Device Simulator
@@ -81,36 +83,36 @@ You'll see:
 
 ```
 rental-management-api/
-├── public/
-│   └── index.html              # Frontend dashboard (NEW!)
 ├── src/
-│   ├── auth.js                 # Authentication endpoints
-│   ├── tenant.js               # Tenant CRUD operations
-│   ├── worker.js               # Main request router
-│   ├── houseRoom.js            # Durable Object for WebSocket (NEW!)
-│   └── lib/
-│       ├── rateLimit.js        # Rate limiting
-│       └── websocketTicket.js  # Ticket system (NEW!)
-├── migrations/
-│   ├── 0001_init.sql          # Initial schema
-│   └── 0002_smartroom.sql     # WebSocket system tables (NEW!)
-├── docs/
-│   ├── 01-GETTING_STARTED.md
-│   ├── 02-API.md
-│   ├── 03-ARCHITECTURE.md
-│   ├── 04-DATABASE.md
-│   ├── 05-SECURITY.md
-│   ├── 06-DEPLOYMENT.md
-│   ├── 07-CONTRIBUTING.md
-│   ├── 08-WEBSOCKET.md        # WebSocket protocol (NEW!)
-│   └── 09-WEBSOCKET_SETUP.md  # Integration guide (NEW!)
-├── WEBSOCKET_INTEGRATION_SUMMARY.md  # Overview (NEW!)
-├── FRONTEND_TESTING.md              # Frontend guide (NEW!)
-├── TESTING_COMPLETE_SYSTEM.md       # Complete test guide (NEW!)
-├── wrangler.jsonc              # Worker configuration
-├── package.json
-└── README.md (this file)
+│   ├── worker.js                  # Worker entry point and route dispatch
+│   ├── auth.js                    # Signup and authentication/session flows
+│   ├── tenant.js                  # Legacy tenant-domain import facade
+│   ├── user.js                    # Legacy account-domain import facade
+│   ├── modules/
+│   │   ├── accounts.js            # Provisioning and managed accounts
+│   │   ├── account-status.js      # Shared active/suspended state handling
+│   │   ├── access-control.js      # Ownership and device-access checks
+│   │   ├── property-compat.js     # House/property compatibility helpers
+│   │   ├── tenants.js             # Tenant profile and rental records
+│   │   ├── properties.js          # Property CRUD and legacy route aliases
+│   │   ├── devices.js             # Device CRUD, pairing, and property listings
+│   │   ├── access.js              # Property/device access management
+│   │   ├── tenant.js              # Domain compatibility barrel
+│   │   └── user.js                # Account compatibility re-export
+│   ├── lib/                       # Validation, crypto, email, rate limiting, tickets
+│   ├── houseRoom.js               # Property-room Durable Object
+│   ├── deviceRoom.js              # Device-room Durable Object
+│   └── fingerprints.js            # Fingerprint enrollment API
+├── public/public/                 # Newer modular frontend reference
+├── dist/                          # Wrangler static-assets directory
+├── migrations/                    # Ordered D1 SQL migrations
+├── tests/                         # Node.js built-in test suite
+├── docs/                          # API, architecture, deployment, and contributor docs
+├── wrangler.jsonc                 # Cloudflare Worker configuration
+└── package.json
 ```
+
+See [Project Architecture](docs/ARCHITECTURE.md) for module responsibilities, compatibility rules, and the current frontend/deployment workflow.
 
 ## 📖 Documentation
 
@@ -120,7 +122,7 @@ rental-management-api/
 
 ### API & Architecture
 - **[02-API.md](docs/02-API.md)** - Complete API reference
-- **[03-ARCHITECTURE.md](docs/03-ARCHITECTURE.md)** - System design overview
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Current system design and module map
 - **[04-DATABASE.md](docs/04-DATABASE.md)** - Database schema
 
 ### Smart Home & WebSocket
@@ -145,7 +147,7 @@ rental-management-api/
 npm run dev
 
 # Browser: http://localhost:8787/
-# Login with admin@example.com / AdminPass123!
+# Login with admin.demo@example.test / DemoPass123!
 ```
 
 ### Full System Test (15 minutes)
@@ -155,12 +157,16 @@ npm run dev
 npm run dev
 
 # Browser: http://localhost:8787/
-# Login with admin@example.com / AdminPass123!
+# Login with admin.demo@example.test / DemoPass123!
 
-# Terminal 2: Start device simulator
+# Terminal 2 (PowerShell): Start device simulator using the one-time pairing key
+$env:DEVICE_ID = "1"
+$env:DEVICE_API_KEY = "<64-character-pairing-key>"
 npm run device:sim
 
 # Browser: Watch device appear and respond to commands
+
+The simulator now uses the same device pairing-key flow as the ESP32. Copy the pairing key shown when creating/rotating a device and pass it through `DEVICE_API_KEY`; do not use an administrator password or a demo API key.
 ```
 
 ### API Testing (curl/wscat)
@@ -329,3 +335,23 @@ Property of rental management system
 ---
 
 **Ready to manage your rental properties with real-time smart home control!** 🏠✨
+
+
+## Fresh-start security notes (refactored baseline)
+
+- Production migrations no longer seed demo users or demo administrator keys. Local demo accounts are created only by `npm run db:seed:local`.
+- Administrator signup requires an unused row in `signup_keys`; an arbitrary non-empty code is rejected. Create a one-time bootstrap key yourself and insert it into the target D1 database through the Cloudflare dashboard or `wrangler d1 execute` (SQL: `INSERT INTO signup_keys (code, used) VALUES ('<your-random-key>', 0);`). Never commit the key or place it in frontend code.
+- Migration `0014_revoke_legacy_demo_credentials.sql` revokes the historical `admin-demo-key` and suspends only the exact legacy seeded account/password hash. Review the effect against your live database before applying it.
+- The in-memory auth limiter is only a per-isolate best-effort guard. Configure Cloudflare Rate Limiting/WAF rules for reliable production-wide enforcement.
+- `npm run dev` now builds the frontend before starting Wrangler. `npm run build:frontend` recreates `dist` from the canonical `public/public` source, removing stale generated files first.
+
+Example one-time key generation (run locally; keep the output private):
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Insert the generated value as a bound SQL literal using the Cloudflare D1 console, or use a carefully quoted `wrangler d1 execute` command. Do not use the example demo key.
+
+
+For the isolated local-first setup and test workflow, see [LOCAL_TEST_GUIDE.md](LOCAL_TEST_GUIDE.md) and [AUDIT_REPORT.md](AUDIT_REPORT.md).

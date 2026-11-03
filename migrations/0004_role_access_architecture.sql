@@ -3,6 +3,14 @@
 -- ReMan Role & Access Architecture
 -- ============================================================
 
+-- The smart-room migration creates houses without house_uid. Add this
+-- column before normalizing existing properties and building its index.
+ALTER TABLE houses ADD COLUMN house_uid TEXT;
+
+-- Initial tenant schema predates room assignments, but this migration
+-- creates the index that depends on the column.
+ALTER TABLE tenants ADD COLUMN room_id INTEGER;
+
 -- ============================================================
 -- 1. POPULATE HOUSE UID
 -- ============================================================

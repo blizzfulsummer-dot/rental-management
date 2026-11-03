@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { SignJWT } from 'jose';
 import { signup } from '../src/auth.js';
 
-const secret = 'test-secret';
+const secret = 'test-secret-for-unit-tests-only-32-chars';
 
 async function createOwnerToken() {
   return new SignJWT({ sub: 1 })

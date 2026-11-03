@@ -1,0 +1,186 @@
+/* Interaction polish: no full-screen loading veil over the login form. */
+    .button-spinner { width:15px;height:15px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;display:inline-block;animation:reman-spin .7s linear infinite;vertical-align:middle;margin-right:9px; }
+    button.is-loading { cursor: wait; }
+    button.is-loading .button-spinner { flex: 0 0 auto; }
+    #loginBtn { display:flex;align-items:center;justify-content:center;min-height:48px;transition:opacity .18s ease,transform .18s ease; }
+    #loginBtn:disabled { opacity:.82;cursor:wait; }
+    .global-loading { background:rgba(241,245,249,.78);backdrop-filter:blur(5px); }
+    .loading-card { border-radius:18px;box-shadow:0 18px 55px rgba(15,23,42,.12); }
+    .stat-card-link { display:flex;text-align:left;width:100%;font-family:inherit;cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+    .stat-card-link:hover { transform:translateY(-3px);border-color:#c7d2fe!important;box-shadow:0 14px 28px rgba(79,70,229,.09)!important; }
+    .stat-card-link:focus-visible,.house-card-clickable:focus-visible { outline:3px solid rgba(79,70,229,.3);outline-offset:3px; }
+    .stat-hint { display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:#6366f1;font-size:12px;font-weight:750;position:relative;z-index:1; }
+    .house-card-clickable { cursor:pointer;display:flex;flex-direction:column;min-height:205px;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+    .house-card-clickable:hover { transform:translateY(-4px);border-color:#c7d2fe!important;box-shadow:0 16px 32px rgba(15,23,42,.08)!important; }
+    .house-card-top { display:flex;justify-content:space-between;align-items:center;margin-bottom:12px; }
+    .card-arrow { width:30px;height:30px;display:grid;place-items:center;background:#f1f5f9;border-radius:10px;color:#6366f1;font-weight:800; }
+    .house-card-footer { margin-top:auto;padding-top:18px;display:flex;justify-content:space-between;align-items:center;color:#6366f1;font-size:12px;font-weight:750; }
+    .device-card-modern { padding:0!important;overflow:hidden; }
+    .device-card-head { display:flex;align-items:center;gap:13px;padding:20px 20px 17px; }
+    .device-icon-tile { width:48px;height:48px;flex:0 0 48px;border-radius:15px;background:linear-gradient(145deg,#eef2ff,#e0e7ff);display:grid;place-items:center;color:#4f46e5;font-size:27px;font-weight:800; }
+    .device-card-title { flex:1;min-width:0; }
+    .device-kicker { display:block;color:#818ba0;font-size:9px;font-weight:850;letter-spacing:.12em;margin-bottom:4px; }
+    .device-card-title h3 { margin:0 0 4px!important;font-size:16px!important;letter-spacing:-.025em; }
+    .device-card-title .meta { font-size:11px;line-height:1.5; }
+    .meta-dot { color:#a5b4fc;padding:0 3px; }
+    .device-card-divider { height:1px;background:#edf0f5;margin:0 20px; }
+    .device-section-label { padding:15px 20px 0;color:#8a94a6;font-size:10px;font-weight:850;letter-spacing:.1em; }
+    .device-card-modern > .inline-actions { padding:12px 20px 18px;gap:8px; }
+    .device-card-modern > .inline-actions .mini-btn { border-radius:10px; }
+    .device-card-modern .device-edit-form { margin:0 16px 16px!important;padding:14px!important;border-radius:13px!important;background:#f8fafc!important;border:1px solid #edf0f5!important; }
+    .device-status { display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border-radius:999px;padding:6px 9px;font-size:10px;font-weight:800; }
+    .status-dot { width:6px;height:6px;border-radius:50%;background:currentColor; }
+    .device-status.online { background:#ecfdf3;color:#15803d; }
+    .device-status.offline { background:#f1f5f9;color:#64748b; }
+    .brand-subtitle { display:inline-block;margin-left:9px;color:#94a3b8;font-size:11px;font-weight:650;letter-spacing:.02em;vertical-align:middle; }
+    .access-toolbar { display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px; }
+    .access-summary { display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px; }
+    .access-count { display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border-radius:9px;background:#eef2ff;color:#4338ca;font-weight:850; }
+    .access-add-panel { display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) auto;gap:12px;align-items:end;margin:0 0 18px;padding:16px;border:1px solid #e2e8f0;border-radius:15px;background:#f8fafc; }
+    .access-add-panel .field { margin:0; }
+    .access-add-panel select,.access-search { width:100%;min-height:44px;padding:10px 12px;border:1px solid #d8e1ef;border-radius:11px;background:#fff;color:var(--text); }
+    .access-user-list { display:grid;gap:10px; }
+    .access-user-row { display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 15px;border:1px solid #e8ecf3;border-radius:14px;background:#fff; }
+    .access-user-main { display:flex;align-items:center;gap:12px;min-width:0; }
+    .access-avatar { display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:13px;background:#eef2ff;color:#4338ca;font-weight:850; }
+    .access-user-name { min-width:0; }
+    .access-user-name strong,.access-user-name span { display:block;overflow-wrap:anywhere; }
+    .access-user-name span { color:var(--muted);font-size:12px;margin-top:2px; }
+    .access-row-actions { display:flex;align-items:center;gap:10px;flex:0 0 auto; }
+    .access-level { display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.05em; }
+    .access-empty { padding:24px;border:1px dashed #cbd5e1;border-radius:14px;text-align:center;color:var(--muted);background:#fafbff; }
+    .access-house-heading { margin:0 0 5px;font-size:19px;letter-spacing:-.025em; }
+    .access-house-subtitle { margin:0;color:var(--muted);font-size:13px; }
+    .access-toolbar .house-selector { margin:0; }
+    .access-toolbar .house-selector select { min-width:220px; }
+    @media(max-width:560px) { .brand-subtitle { display:block;margin:2px 0 0; } .access-add-panel { grid-template-columns:minmax(0,1fr); } .access-add-panel .primary-btn { width:100%; } .access-user-row { align-items:flex-start;flex-wrap:wrap; } .access-row-actions { width:100%;justify-content:space-between;padding-left:52px; } }
+    @media(max-width:560px) { .device-card-head { padding:16px 14px 14px;gap:10px;flex-wrap:wrap; } .device-icon-tile { width:42px;height:42px;flex-basis:42px; } .device-card-title { min-width:calc(100% - 64px); } .device-status { margin-left:52px; } .device-card-divider { margin:0 14px; } .device-section-label { padding:13px 14px 0; } .device-card-modern > .inline-actions { padding:10px 14px 14px; } }
+
+
+    .auth-links{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+    .auth-link{border:0;background:transparent;color:#4f46e5;font-weight:750;font-size:13px;cursor:pointer;padding:7px 0;text-decoration:none}
+    .auth-link:hover{text-decoration:underline}
+    .auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:#94a3b8;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .auth-divider:before,.auth-divider:after{content:"";height:1px;background:#e2e8f0;flex:1}
+    .auth-secondary-btn{width:100%;background:#fff;color:#4338ca;border:1px solid #c7d2fe}
+    .auth-dialog{width:min(94vw,470px);padding:clamp(22px,4vw,34px);border:1px solid #e2e8f0;border-radius:22px;color:var(--text);box-shadow:0 30px 90px #0f172a33}
+    .auth-dialog::backdrop{background:rgba(15,23,42,.58);backdrop-filter:blur(4px)}
+    .auth-dialog h2{letter-spacing:-.035em;margin-bottom:8px}
+    .auth-dialog .subtle{margin-bottom:20px;font-size:14px}
+    .auth-dialog .field{margin-bottom:14px}
+    .auth-dialog .primary-btn{width:100%}
+    .auth-dialog .alert{margin-top:12px}
+    .auth-dialog .auth-link{margin-top:8px}
+
+
+    
+
+/* Consistent utility classes for controls previously styled inline. */
+[hidden] { display: none !important; }
+.login-help-text { margin: 0; font-size: 12px; }
+.panel-header-spaced { margin-top: 24px; }
+.password-update-btn { width: 100%; }
+.account-dialog-subtitle { margin: 4px 0 18px; }
+.account-create-btn { width: auto; }
+.access-add-panel .primary-btn { width: auto; }
+.access-search { max-width: 280px; }
+.password-reset-complete-form { margin-top: 18px; }
+.house-card-clickable:focus-visible { outline: 3px solid rgba(37,99,235,.28); outline-offset: 3px; }
+.house-card-open { width: 100%; border: 0; padding: 0; margin: 0 0 12px; background: transparent; text-align: left; cursor: pointer; }
+.house-card-open:hover { transform: none; }
+.house-card-open:focus-visible { outline: 3px solid rgba(79,70,229,.3); outline-offset: 3px; border-radius: 10px; }
+
+
+#houseAccessAddForm button:disabled {
+    cursor: not-allowed !important;
+}
+
+#houseAccessAddForm button:disabled.is-loading {
+    cursor: not-allowed !important;
+}
+
+/* Cursor behavior */
+button,
+a,
+[role="button"] {
+    cursor: pointer;
+}
+
+button:disabled,
+button[aria-busy="true"],
+button.is-loading {
+    cursor: default !important;
+}
+
+
+.confirmation-dialog {
+    width: min(92vw, 420px);
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: 0 25px 80px rgba(15, 23, 42, .2);
+}
+
+.confirmation-dialog::backdrop {
+    background: rgba(15, 23, 42, .48);
+    backdrop-filter: blur(5px);
+}
+
+.confirmation-content {
+    padding: 30px;
+    text-align: center;
+}
+
+.confirmation-icon {
+    display: grid;
+    place-items: center;
+    width: 54px;
+    height: 54px;
+    margin: 0 auto 18px;
+    border-radius: 17px;
+    background: #eef2ff;
+    color: #4338ca;
+    font-size: 25px;
+    font-weight: 900;
+}
+
+.confirmation-icon.danger {
+    background: #fff1f2;
+    color: var(--danger);
+}
+
+.confirmation-content h2 {
+    margin: 0 0 9px;
+    font-size: 21px;
+    letter-spacing: -.035em;
+}
+
+.confirmation-content p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.65;
+}
+
+.confirmation-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 25px;
+}
+
+.confirmation-actions button {
+    min-width: 110px;
+}
+
+.confirmation-actions .danger-btn {
+    background: #b91c1c;
+    color: #fff;
+    border: 1px solid #b91c1c;
+}
+
+.confirmation-actions .danger-btn:hover {
+    background: #991b1b;
+}

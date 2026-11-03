@@ -31,13 +31,13 @@ This guide will help you set up and run the Rental Management API locally.
    - Configure D1 database binding (database_id)
    - Update allowed CORS origins if needed
 
-4. **Run database migrations**
+4. **Initialize the local database and demo accounts**
 
-   When you have a D1 database configured:
+   For local development, create the local D1 schema and seed all account types:
    ```bash
-   npm run dev
+   npm run db:setup:local
    ```
-   This will apply migrations from the `migrations/` folder.
+   This command explicitly uses local D1 and applies migrations before adding the demo data. Do not remove the `--local` option from the package scripts.
 
 ### Development Workflow
 
@@ -51,13 +51,31 @@ The API will be available at `http://localhost:8787`
 ```bash
 npm run build
 ```
-Output: `dist/worker.js` (bundled worker code)
+Copies the frontend from `public/public/` into Wrangler's `dist/` assets directory, then runs a Worker deployment dry run.
 
 #### Run tests
 ```bash
 npm test
 ```
 Runs all test files matching `*.test.js`
+
+#### Seed local demo accounts
+To reseed sample accounts and property data into local D1 after applying migrations:
+
+```bash
+npm run db:seed:local
+```
+
+This command explicitly uses Wrangler's `--local` database. Do not remove `--local` or change the script to target remote D1. All demo accounts use `DemoPass123!`:
+
+| Account type | Email |
+|---|---|
+| Admin | `admin.demo@example.test` |
+| Owner | `owner.demo@example.test` |
+| Regular user | `user.demo@example.test` |
+| Tenant | `tenant.demo@example.test` |
+
+The fixture creates a demo property, an associated tenant record, and property access for the regular user and tenant. It does not create device fixtures. The seed is idempotent and can be run again safely.
 
 #### Deploy to production
 ```bash

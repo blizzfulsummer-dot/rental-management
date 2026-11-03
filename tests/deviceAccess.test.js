@@ -55,7 +55,7 @@ function makeDb({ hasDeviceAccess, role = 'tenant', ownsHouse = false }) {
 }
 
 test('tenant receives a control ticket only for a device in user_device_access', async () => {
-  const secret = 'device-ticket-test-secret';
+  const secret = 'device-ticket-test-secret-only-32chars';
   const { DB, ticketWasInserted } = makeDb({ hasDeviceAccess: false });
   const request = await makeRequest(secret, { houseId: 10, deviceId: 7, clientType: 'web' });
 
@@ -68,7 +68,7 @@ test('tenant receives a control ticket only for a device in user_device_access',
 });
 
 test('tenant receives a control ticket for an explicitly granted device', async () => {
-  const secret = 'device-ticket-test-secret';
+  const secret = 'device-ticket-test-secret-only-32chars';
   const { DB, ticketWasInserted } = makeDb({ hasDeviceAccess: true });
   const request = await makeRequest(secret, { houseId: 10, deviceId: 7, clientType: 'web' });
 
@@ -81,7 +81,7 @@ test('tenant receives a control ticket for an explicitly granted device', async 
 });
 
 test('owner with user_device_access can control an assigned device in a shared house', async () => {
-  const secret = 'device-ticket-test-secret';
+  const secret = 'device-ticket-test-secret-only-32chars';
   const { DB, ticketWasInserted } = makeDb({ hasDeviceAccess: true, role: 'owner', ownsHouse: false });
   const request = await makeRequest(secret, { houseId: 10, deviceId: 7, clientType: 'web' });
 
@@ -94,7 +94,7 @@ test('owner with user_device_access can control an assigned device in a shared h
 });
 
 test('owner without ownership or device access cannot control a device in a shared house', async () => {
-  const secret = 'device-ticket-test-secret';
+  const secret = 'device-ticket-test-secret-only-32chars';
   const { DB, ticketWasInserted } = makeDb({ hasDeviceAccess: false, role: 'owner', ownsHouse: false });
   const request = await makeRequest(secret, { houseId: 10, deviceId: 7, clientType: 'web' });
 

@@ -23,8 +23,8 @@ http://localhost:8787/
 ### 3. Login with Demo Credentials
 
 ```
-Email: admin@example.com
-Password: AdminPass123!
+Email: admin.demo@example.test
+Password: DemoPass123!
 ```
 
 ## Frontend Features
@@ -115,8 +115,8 @@ Even without real IoT devices connected, you can test:
 curl -X POST http://localhost:8787/api/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@example.com",
-    "password": "AdminPass123!"
+    "email": "admin.demo@example.test",
+    "password": "DemoPass123!"
   }'
 ```
 
@@ -126,7 +126,7 @@ Response:
   "access_token": "eyJhbGc...",
   "user": {
     "id": 1,
-    "email": "admin@example.com",
+    "email": "admin.demo@example.test",
     "role": "admin"
   }
 }

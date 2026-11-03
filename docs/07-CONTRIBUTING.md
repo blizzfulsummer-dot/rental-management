@@ -46,6 +46,24 @@ Test your changes locally before committing.
 
 ---
 
+## Where Code Belongs
+
+- Worker routing and request-level middleware: `src/worker.js`
+- Authentication and session lifecycle: `src/auth.js`
+- Account provisioning and account administration: `src/modules/accounts.js`
+- Tenant profile and rental records: `src/modules/tenants.js`
+- Property handlers: `src/modules/properties.js`
+- Device handlers and pairing: `src/modules/devices.js`
+- Property/device access management: `src/modules/access.js`
+- Shared access and property-name compatibility: `src/modules/access-control.js` and `src/modules/property-compat.js`
+- Durable Object/WebSocket behavior: `src/houseRoom.js`, `src/deviceRoom.js`, and `src/lib/websocketTicket.js`
+- Browser frontend reference: `public/public/`
+- Cloudflare deployment assets: `dist/`
+
+Read [Project Architecture](./ARCHITECTURE.md) before adding a new domain or changing legacy house/property compatibility. Keep existing import facades and API behavior intact unless a change explicitly includes migration and compatibility coverage.
+
+## Development Workflow
+
 ## Development Workflow
 
 ### 1. Make Changes

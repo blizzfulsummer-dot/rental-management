@@ -1,0 +1,166 @@
+/* UI/UX refinement layer */
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #15803d;
+      --warning: #b45309;
+      --danger: #b91c1c;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 8px 24px rgba(15, 23, 42, .055);
+      --radius: 18px;
+    }
+    html { min-height: 100%; background: var(--bg); }
+    body {
+      min-height: 100vh;
+      background: radial-gradient(ellipse at top left, #eaf1ff 0, transparent 42%), var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select { font: inherit; }
+    button { touch-action: manipulation; }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, .28);
+      outline-offset: 2px;
+    }
+    .screen { min-height: 100vh; padding: clamp(16px, 3vw, 32px); }
+    .login-shell { min-height: calc(100vh - 64px); padding: 16px; }
+    .login-card {
+      width: min(100%, 440px);
+      padding: clamp(24px, 5vw, 38px);
+      border: 1px solid rgba(226,232,240,.9);
+      border-radius: 26px;
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 24px 70px rgba(30,64,175,.10);
+    }
+    .eyebrow { letter-spacing: .14em; font-size: 11px; }
+    .login-card h1 { letter-spacing: -.045em; line-height: 1.12; }
+    .subtle { color: var(--muted); }
+    .field label { font-size: 13px; }
+    .field input, .field select,
+    .password-required-form input,
+    .device-edit-form input, .device-edit-form select,
+    .house-selector select,
+    #passwordForm input {
+      min-height: 46px;
+      border: 1px solid #d8e1ef;
+      border-radius: 12px;
+      background: #fff;
+      transition: border-color .16s ease, box-shadow .16s ease;
+    }
+    .field input:focus, .field select:focus,
+    .password-required-form input:focus,
+    .device-edit-form input:focus, .device-edit-form select:focus,
+    .house-selector select:focus, #passwordForm input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px rgba(37,99,235,.10);
+    }
+    .primary-btn, .secondary-btn, .ghost-btn, .mini-btn, .view-tab {
+      min-height: 40px;
+      transition: transform .16s ease, background .16s ease, box-shadow .16s ease, border-color .16s ease;
+    }
+    .primary-btn { border-radius: 12px; box-shadow: 0 6px 14px rgba(37,99,235,.16); }
+    .primary-btn:hover { box-shadow: 0 9px 20px rgba(37,99,235,.22); }
+    button:disabled { transform: none; opacity: .58; cursor: not-allowed; }
+    .topbar {
+      max-width: 1280px;
+      padding: 18px 22px;
+      border: 1px solid rgba(226,232,240,.9);
+      background: rgba(255,255,255,.92);
+      box-shadow: 0 6px 20px rgba(15,23,42,.045);
+      backdrop-filter: blur(12px);
+    }
+    .brand { letter-spacing: -.025em; }
+    .dashboard { max-width: 1280px; }
+    .stat-grid { gap: 14px; margin: 22px 0; }
+    .stat-card {
+      min-width: 0;
+      padding: 21px;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 14px rgba(15,23,42,.035);
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+    .stat-label { font-size: 11px; letter-spacing: .09em; }
+    .stat-value { overflow-wrap: anywhere; letter-spacing: -.04em; }
+    .layout { grid-template-columns: minmax(0, 1.55fr) minmax(280px, .75fr); gap: 18px; }
+    .panel {
+      min-width: 0;
+      padding: clamp(16px, 2vw, 24px);
+      border: 1px solid var(--border);
+      box-shadow: 0 5px 18px rgba(15,23,42,.035);
+    }
+    .panel-header { align-items: center; }
+    .panel-header h2 { margin: 0; font-size: 1.1rem; letter-spacing: -.025em; }
+    .card-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); }
+    .house-card, .tenant-card, .device-card, .profile-card {
+      min-width: 0;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(15,23,42,.025);
+    }
+    .house-card, .tenant-card, .device-card { transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+    .house-card:hover, .tenant-card:hover, .device-card:hover {
+      border-color: #c4d5f5;
+      box-shadow: 0 8px 20px rgba(15,23,42,.055);
+      transform: translateY(-1px);
+    }
+    .device-card h3, .house-card h3, .tenant-card h3 { overflow-wrap: anywhere; }
+    .meta { overflow-wrap: anywhere; }
+    .tag, .device-status, .role-pill { white-space: nowrap; }
+    .inline-actions { align-items: center; }
+    .mini-btn { border: 1px solid transparent; }
+    .mini-btn:hover { filter: brightness(.97); }
+    .mini-btn.danger { border-color: #fecaca; }
+    .view-tabs { gap: 8px; }
+    .view-tab { border-color: #e2e8f0; background: rgba(255,255,255,.8); }
+    .view-tab:hover { border-color: #93b4f7; }
+    .view-tab.active { box-shadow: 0 4px 12px rgba(37,99,235,.16); }
+    .empty { border-color: #cbd5e1; background: #f8fafc; }
+    .alert { line-height: 1.45; overflow-wrap: anywhere; }
+    .password-form input { padding: 12px 14px; }
+    .tenant-registration-form { background: #f8fafc; }
+    .pairing-key-panel { overflow-wrap: anywhere; }
+    .pairing-key-panel code { max-width: 100%; }
+    dialog.password-required-dialog { background: #fff; }
+    @media (max-width: 900px) {
+      .screen { padding: 16px; }
+      .login-shell { min-height: calc(100vh - 32px); }
+      .layout { grid-template-columns: minmax(0, 1fr); }
+      .topbar { flex-direction: row; align-items: center; }
+      .user-meta { justify-content: flex-end; gap: 10px; }
+      .dashboard { padding: 0 0 24px; }
+    }
+    @media (max-width: 600px) {
+      .screen { padding: 10px; }
+      .login-shell { padding: 8px; }
+      .login-card { border-radius: 20px; }
+      .topbar { align-items: flex-start; flex-direction: column; padding: 16px; }
+      .user-meta { width: 100%; justify-content: space-between; }
+      .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .stat-card { padding: 15px; }
+      .stat-value { font-size: clamp(1.35rem, 7vw, 1.8rem); }
+      .panel { padding: 14px; }
+      .panel-header { flex-wrap: wrap; }
+      .card-grid { grid-template-columns: minmax(0, 1fr); }
+      .view-tabs { overflow-x: auto; flex-wrap: nowrap; padding: 2px 1px 6px; }
+      .view-tab { flex: 0 0 auto; }
+      .tenant-form-grid { grid-template-columns: minmax(0, 1fr); }
+      .tenant-registration-form .primary-btn { width: 100%; }
+      .inline-actions > button { max-width: 100%; }
+      .house-selector { align-items: stretch; flex-direction: column; }
+      .house-selector select { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+
+
+
+    

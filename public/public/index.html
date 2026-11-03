@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reman | Smart Property Operations</title>
+    <link rel="stylesheet" href="./styles/main.css" />
+  </head>
+  <body>
+    <div
+      id="globalLoading"
+      class="global-loading"
+      role="status"
+      aria-live="polite"
+      aria-hidden="true"
+    >
+      <div class="loading-card">
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <div>
+          <div id="globalLoadingTitle" class="loading-title">Loading Reman</div>
+          <div id="globalLoadingDetail" class="loading-detail">
+            Please wait while we retrieve your data.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      id="toastRegion"
+      class="toast-region"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
+    <div id="loginScreen" class="screen active">
+      <div class="login-shell">
+        <aside class="login-aside" aria-label="About ReMan">
+          <div class="login-brandmark">
+            <span class="login-brand-icon" aria-hidden="true">R</span>
+            <span class="login-brand-name">Reman<small>SMART PROPERTY RENTAL MANAGEMENT SOLUTION</small></span>
+          </div>
+          <div class="login-aside-copy">
+            <p class="login-aside-kicker">A SMART way to manage</p>
+            <h2>Every <strong>PROPERTY</strong>,<br />In good <i>hands.</i></h2>
+            <p>Bring your properties, people, and smart access together in one.</p>
+          </div>
+          <div class="login-property-art" aria-hidden="true">
+            <!--div class="login-art-label"><span></span> PROPERTY OVERVIEW</div-->
+            <svg viewBox="0 0 440 250" role="presentation">
+              <path class="art-ground" d="M25 218h390" />
+              <path class="art-shadow" d="m99 205 105-28 131 28-105 27z" />
+              <path class="art-side" d="m281 91 58 26v102l-58-22z" />
+              <path class="art-front" d="M117 117 281 72v125l-164 44z" />
+              <path class="art-roof-side" d="m99 116 182-51 76 33-181 54z" />
+              <path class="art-roof-front" d="m99 116 182-51v18l-164 47v111l-18 5z" />
+              <path class="art-window" d="m145 137 42-12v33l-42 12zm67-19 42-12v33l-42 12z" />
+              <path class="art-window" d="m145 184 42-12v33l-42 12zm67-19 42-12v33l-42 12z" />
+              <path class="art-door" d="m263 182 18-5v21l-18 5z" />
+              <path class="art-plant" d="M82 220v-26m0 14-13-10m13 4 12-13m255 32v-26m0 14-12-10m12 4 13-13" />
+            </svg>
+            <div class="login-art-caption">Simple, Smart, Secure, Space Solution!</div>
+          </div>
+          <div class="login-aside-footer">Manage your properties with ease!</div>
+        </aside>
+        <div class="login-card">
+          <!--p class="eyebrow">SMART PROPERTY OPERATIONS</p-->
+          <div class="auth-divider"></div>
+          <h1>Welcome Home!</h1>
+          <p class="login-caption">Sign in to your account!</p>
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" type="email" autocomplete="email" required />
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+
+          <button id="loginBtn" class="primary-btn" type="button">
+            Sign In
+          </button>
+          <div class="auth-links">
+            <button
+              id="forgotPasswordLink"
+              class="auth-link"
+              type="button"
+              hidden
+            >
+              Forgot password?
+            </button>
+            <span id="loginHelpText" class="meta login-help-text"
+              >Access more features</span
+            >
+          </div>
+          <div
+            id="loginAlert"
+            class="alert error"
+            role="status"
+            aria-live="polite"
+          ></div>
+          <div class="auth-divider">New to Reman?</div>
+          <button
+            id="openSignupBtn"
+            class="primary-btn auth-secondary-btn"
+            type="button"
+          >
+            Create an account
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="dashboardScreen" class="screen">
+      <header class="topbar">
+        <div class="brand">
+          Reman <span class="brand-subtitle">Property &amp; Smart Access</span>
+        </div>
+        <div class="user-meta">
+          <span id="userRole" class="role-pill">Role</span>
+          <strong id="userDisplayName">User</strong>
+          <button id="logoutBtn" class="ghost-btn" type="button">Logout</button>
+        </div>
+      </header>
+
+      <div class="dashboard">
+        <section class="dashboard-heading" aria-labelledby="workspaceTitle">
+          <div>
+            <p class="dashboard-eyebrow">Welcome Home</p>
+            <h1 id="workspaceTitle">Hello there!</h1>
+            <p>You can now access and manage your properties and devices here!</p>
+          </div>
+          <!--div class="workspace-mark" aria-hidden="true">
+            <span class="workspace-mark-icon">R</span>
+            <span><strong>ReMan</strong><small>PROPERTY MANAGEMENT</small></span>
+          </div-->
+        </section>
+
+        <div id="statsGrid" class="stat-grid"></div>
+
+        <aside class="dashboard-sidebar">
+          <p class="sidebar-label">WORKSPACE</p>
+          <nav id="viewTabs" class="view-tabs" aria-label="Main navigation"></nav>
+          <div class="sidebar-note">
+            <span class="sidebar-note-icon" aria-hidden="true">⌂</span>
+            <strong>Everything in one place</strong>
+            <span>View your properties and connected access.</span>
+          </div>
+        </aside>
+
+        <div class="layout">
+          <section id="mainWorkspacePanel" class="panel">
+            <div class="panel-header">
+              <h2 id="mainPanelTitle" tabindex="-1" aria-live="polite">Overview</h2>
+              <button id="refreshBtn" class="secondary-btn" type="button">
+                Refresh
+              </button>
+            </div>
+            <div id="mainPanelContent" class="list-grid"></div>
+          </section>
+
+          <aside class="panel">
+            <div class="panel-header">
+              <h2>Profile</h2>
+            </div>
+            <div id="profilePanel" class="profile-card"></div>
+
+            <div class="panel-header panel-header-spaced">
+              <h2>Change password</h2>
+            </div>
+            <form id="passwordForm" class="password-form">
+              <input
+                id="oldPassword"
+                type="password"
+                placeholder="Current password"
+              />
+              <input
+                id="newPassword"
+                type="password"
+                placeholder="New password"
+              />
+              <button type="submit" class="primary-btn password-update-btn">
+                Update Password
+              </button>
+            </form>
+            <div id="passwordAlert" class="alert"></div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <dialog
+      id="passwordRequiredDialog"
+      class="password-required-dialog"
+      aria-labelledby="passwordRequiredTitle"
+    >
+      <h2 id="passwordRequiredTitle">Change your password</h2>
+      <p class="subtle">
+        For your security, you must choose a new password before continuing. Use
+        at least 8 characters with uppercase and lowercase letters, a number,
+        and a symbol.
+      </p>
+      <form id="passwordRequiredForm" class="password-required-form">
+        <div class="field">
+          <label for="requiredCurrentPassword">Current password</label>
+          <input
+            id="requiredCurrentPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="requiredNewPassword">New password</label>
+          <input
+            id="requiredNewPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="requiredConfirmPassword">Confirm new password</label>
+          <input
+            id="requiredConfirmPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          />
+        </div>
+        <button id="passwordRequiredSubmit" type="submit" class="primary-btn">
+          Update password
+        </button>
+        <div
+          id="passwordRequiredAlert"
+          class="alert"
+          role="status"
+          aria-live="polite"
+        ></div>
+      </form>
+    </dialog>
+
+    <dialog
+      id="accountEditorDialog"
+      class="account-dialog"
+      aria-labelledby="accountEditorTitle"
+    >
+      <div class="panel-header">
+        <div>
+          <h2 id="accountEditorTitle">Create account</h2>
+          <p class="subtle account-dialog-subtitle">
+            Manage account details and property assignment.
+          </p>
+        </div>
+        <button type="button" class="ghost-btn" data-close-account-dialog>
+          Close
+        </button>
+      </div>
+      <form id="accountEditorForm">
+        <input type="hidden" name="account_id" />
+        <div class="tenant-form-grid">
+          <div class="field">
+            <label for="accountRole">Account type</label
+            ><select id="accountRole" name="role" required></select>
+          </div>
+          <div class="field">
+            <label for="accountName">Full name</label
+            ><input
+              id="accountName"
+              name="name"
+              maxlength="100"
+              autocomplete="name"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="accountEmail">Email address</label
+            ><input
+              id="accountEmail"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+            />
+          </div>
+          <div class="field" id="accountHouseField">
+            <label for="accountHouse">Assigned properties</label
+            ><select id="accountHouse" name="house_ids" multiple></select>
+            <p class="account-hint">
+              Select one or more properties. Use Ctrl (Windows) or Command (Mac)
+              to select multiple.
+            </p>
+          </div>
+          <div class="field account-tenant-only">
+            <label for="accountUnit">Leased unit</label
+            ><input id="accountUnit" name="leased_unit" />
+          </div>
+          <div class="field account-tenant-only">
+            <label for="accountRent">Rent amount</label
+            ><input
+              id="accountRent"
+              name="rent_amount"
+              type="number"
+              min="0"
+              step="0.01"
+            />
+          </div>
+          <div class="field account-tenant-only">
+            <label for="accountDeposit">Deposit</label
+            ><input
+              id="accountDeposit"
+              name="deposit"
+              type="number"
+              min="0"
+              step="0.01"
+            />
+          </div>
+          <div class="field account-tenant-only">
+            <label for="accountBalance">Balance</label
+            ><input
+              id="accountBalance"
+              name="balance"
+              type="number"
+              step="0.01"
+            />
+          </div>
+          <div class="field account-tenant-only">
+            <label for="accountBillingCycle">Billing cycle</label
+            ><select id="accountBillingCycle" name="billing_cycle">
+              <option value="monthly">Monthly</option>
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Biweekly</option>
+            </select>
+          </div>
+          <div class="field account-tenant-only">
+            <label for="accountOnboardDate">Move-in date</label
+            ><input id="accountOnboardDate" name="onboard_date" type="date" />
+          </div>
+        </div>
+        <p id="accountEditorHint" class="account-hint">
+          New accounts receive a temporary password and must change it on first
+          sign-in.
+        </p>
+        <div
+          id="accountEditorAlert"
+          class="alert"
+          role="status"
+          aria-live="polite"
+        ></div>
+        <div class="dialog-actions">
+          <button type="button" class="secondary-btn" data-close-account-dialog>
+            Cancel</button
+          ><button id="accountEditorSubmit" type="submit" class="primary-btn">
+            Create account
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      id="accountCreatedDialog"
+      class="account-created-dialog"
+      aria-labelledby="accountCreatedTitle"
+    >
+      <div class="account-created-icon">✓</div>
+
+      <h2 id="accountCreatedTitle">Account created successfully!</h2>
+
+      <p id="createdAccountEmail" class="meta"></p>
+
+      <p id="createdEmailStatus" role="status" aria-live="polite"></p>
+
+      <div class="created-password-box">
+        <label for="createdTempPassword"> Temporary password </label>
+
+        <div class="created-password-row">
+          <input
+            id="createdTempPassword"
+            type="text"
+            readonly
+            autocomplete="off"
+            spellcheck="false"
+          />
+
+          <button
+            type="button"
+            id="copyCreatedTempPassword"
+            class="secondary-btn"
+          >
+            Copy
+          </button>
+        </div>
+      </div>
+
+      <p class="account-hint">
+        The user must change this password on their first sign-in. Share it
+        securely if necessary.
+      </p>
+
+      <div class="dialog-actions">
+        <button type="button" class="primary-btn" data-close-created-dialog>
+          Done
+        </button>
+      </div>
+    </dialog>
+
+    <dialog id="confirmationDialog" class="confirmation-dialog">
+      <div class="confirmation-content">
+        <div id="confirmationIcon" class="confirmation-icon">!</div>
+
+        <h2 id="confirmationTitle">Are you sure?</h2>
+
+        <p id="confirmationMessage">Please confirm this action.</p>
+
+        <div class="confirmation-actions">
+          <button type="button" id="confirmationCancel" class="ghost-btn">
+            Cancel
+          </button>
+
+          <button type="button" id="confirmationConfirm" class="primary-btn">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="signupDialog" class="auth-dialog" aria-labelledby="signupTitle">
+      <h2 id="signupTitle">Create your Reman account</h2>
+      <p class="subtle">
+        Register a standard user account. House and device access can be granted
+        by an owner or administrator.
+      </p>
+      <form id="signupForm">
+        <div class="field">
+          <label for="signupName">Full name</label
+          ><input id="signupName" name="name" autocomplete="name" required />
+        </div>
+        <div class="field">
+          <label for="signupEmail">Email address</label
+          ><input
+            id="signupEmail"
+            name="email"
+            type="email"
+            autocomplete="email"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="signupPassword">Password</label
+          ><input
+            id="signupPassword"
+            name="password"
+            type="password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="signupConfirmPassword">Confirm password</label
+          ><input
+            id="signupConfirmPassword"
+            name="confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          />
+        </div>
+        <button id="signupSubmitBtn" class="primary-btn" type="submit">
+          Create account
+        </button>
+        <div
+          id="signupAlert"
+          class="alert"
+          role="status"
+          aria-live="polite"
+        ></div>
+      </form>
+      <button class="auth-link" type="button" data-close-dialog="signupDialog">
+        Back to sign in
+      </button>
+    </dialog>
+
+    <dialog
+      id="forgotPasswordDialog"
+      class="auth-dialog"
+      aria-labelledby="forgotPasswordTitle"
+    >
+      <h2 id="forgotPasswordTitle">Reset your password</h2>
+      <p class="subtle">
+        We’ll send a verification code to the email address on your account if
+        it is eligible for password recovery.
+      </p>
+      <form id="forgotPasswordForm">
+        <div class="field">
+          <label for="resetEmail">Email address</label
+          ><input id="resetEmail" type="email" autocomplete="email" required />
+        </div>
+        <button id="requestResetBtn" class="primary-btn" type="submit">
+          Send verification code
+        </button>
+        <div
+          id="forgotPasswordAlert"
+          class="alert"
+          role="status"
+          aria-live="polite"
+        ></div>
+      </form>
+      <form id="completeResetForm" hidden class="password-reset-complete-form">
+        <div class="field">
+          <label for="resetCode">Verification code</label
+          ><input
+            id="resetCode"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="resetNewPassword">New password</label
+          ><input
+            id="resetNewPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="resetConfirmPassword">Confirm new password</label
+          ><input
+            id="resetConfirmPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          />
+        </div>
+        <button id="completeResetBtn" class="primary-btn" type="submit">
+          Update password
+        </button>
+        <div
+          id="completeResetAlert"
+          class="alert"
+          role="status"
+          aria-live="polite"
+        ></div>
+      </form>
+      <button
+        class="auth-link"
+        type="button"
+        data-close-dialog="forgotPasswordDialog"
+      >
+        Back to sign in
+      </button>
+    </dialog>
+
+    <script type="module" src="./js/app.js"></script>
+    <script type="module" src="./js/ux-enhancements.js"></script>
+  </body>
+</html>

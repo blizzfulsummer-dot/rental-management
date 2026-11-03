@@ -4,6 +4,33 @@
 
 PRAGMA defer_foreign_keys = TRUE;
 
+-- Billing may not exist in databases created from the current initial
+-- migrations yet; create the source tables so the rebuild below is portable.
+CREATE TABLE IF NOT EXISTS billing (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL,
+    user_id INTEGER,
+    amount REAL NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    due_date DATETIME,
+    paid_at DATETIME,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL,
+    billing_id INTEGER,
+    amount INTEGER NOT NULL,
+    paid_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    method TEXT DEFAULT 'cash',
+    note TEXT,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (billing_id) REFERENCES billing(id) ON DELETE SET NULL
+);
+
 -- 1. Snapshot tables that need rebuilding. These snapshots intentionally have
 -- no foreign-key constraints, so the original tables can be replaced safely.
 CREATE TABLE _mig_password_resets AS

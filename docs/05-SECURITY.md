@@ -697,3 +697,8 @@ For security issues:
 - Provide detailed description
 - Include steps to reproduce
 - Allow time for patch before disclosure
+
+
+## Cloudflare Secrets Store binding handling
+
+Bindings declared in `secrets_store_secrets` are objects and their values must be read with `await binding.get()`. ReMan now resolves `JWT_SCRT`, `EMAIL_SERVICE_KEY`, and `RESEND_FROM_EMAIL` through a shared helper that also supports local string values from `.dev.vars`. Use a unique random JWT secret of at least 32 characters. Never place production secret values in source control or frontend assets.

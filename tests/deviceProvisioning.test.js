@@ -34,10 +34,16 @@ function createDb({ houseManaged = true, userInOwnerScope = true } = {}) {
             async run() {
               statements.push({ sql, values });
               return { success: true };
-            }
+            },
+            sql,
+            values
           };
         }
       };
+    },
+    async batch(batchStatements) {
+      statements.push(...batchStatements.map(({ sql, values }) => ({ sql, values })));
+      return [];
     }
   };
   return { DB, statements };
@@ -74,6 +80,9 @@ test('owner can grant and revoke a device to an eligible tenant', async () => {
   assert.equal(revoke.status, 200);
   assert.ok(statements.some(({ sql, values }) =>
     sql.includes('DELETE FROM user_device_access') && values[0] === 42 && values[1] === 5
+  ));
+  assert.ok(statements.some(({ sql, values }) =>
+    sql.includes('DELETE FROM device_fingerprint_enrollments') && values[0] === 42 && values[1] === 5
   ));
 });
 

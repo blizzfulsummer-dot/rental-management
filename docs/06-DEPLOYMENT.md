@@ -385,8 +385,8 @@ curl -X POST https://api.your-domain.com/api/signup \
 curl -X POST https://api.your-domain.com/api/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@example.com",
-    "password": "AdminPass123!"
+    "email": "admin.demo@example.test",
+    "password": "DemoPass123!"
   }'
 ```
 

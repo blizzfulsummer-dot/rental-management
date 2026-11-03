@@ -18,12 +18,33 @@ import {
   updateDevice,
   updateHouse,
   updateTenant
-} from './tenant.js';
-import { getAuthUser, login, refreshToken, requestReset, resetPassword, signup, updatePassword, verifyJwt, registerProvisionedAccount,listManagedAccounts, updateManagedAccount,resetManagedAccountPassword } from './auth.js';
+} from './modules/tenant.js';
+import {
+  getAuthUser,
+  login,
+  refreshToken,
+  requestReset,
+  resetPassword,
+  requestPasswordResetCode,
+  confirmPasswordResetCode,
+  signup,
+  updatePassword,
+  verifyJwt
+} from './auth.js';
+import {
+  listManagedAccounts as listManagedUsers,
+  updateManagedAccount as updateManagedUser,
+  resetManagedAccountPassword as resetManagedUserPassword,
+  deleteManagedAccount as deleteManagedUser,
+  suspendAccount as suspendManagedUser,
+  reactivateAccount as reactivateManagedUser,
+  registerProvisionedAccount as registerManagedUser
+} from './modules/user.js';
 import { createRateLimiter } from './lib/rateLimit.js';
 import { issueDeviceWebSocketTicket, issueWebSocketTicket, validateWebSocketTicket } from './lib/websocketTicket.js';
 import { HouseRoom } from './houseRoom.js';
 import { DeviceRoom } from './deviceRoom.js';
+import { listAuditLogs } from './modules/auditLogs.js';
 import {
   cancelFingerprintEnrollment,
   listFingerprintEnrollments,
@@ -38,28 +59,38 @@ const ALLOWED_ORIGINS = [
 
 const authRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 10 });
 
-function withCors(response, allowOrigin = '*') {
-  response.headers.set('Access-Control-Allow-Origin', allowOrigin);
+function withCors(response, allowOrigin = null) {
+  if (allowOrigin) response.headers.set('Access-Control-Allow-Origin', allowOrigin);
+  response.headers.set('Vary', 'Origin');
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Cache-Control', 'no-store');
   return response;
 }
 
 function getAllowOrigin(request) {
   const origin = request.headers.get('Origin');
-  if (origin && ALLOWED_ORIGINS.includes(origin)) return origin;
-  return '*';
+  if (!origin) return null;
+  if (ALLOWED_ORIGINS.includes(origin)) return origin;
+  const url = new URL(request.url);
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]') return origin;
+  return null;
 }
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff'
+    }
   });
 }
 
 function shouldRateLimit(pathname) {
-  return ['/api/signup', '/api/login', '/api/update_password', '/api/request_reset', '/api/reset_password'].includes(pathname);
+  return ['/api/signup', '/api/login', '/api/update_password', '/api/request_reset', '/api/reset_password', '/api/refresh', '/api/password-reset/request', '/api/password-reset/confirm', '/ws/ticket', '/ws/device-ticket'].includes(pathname);
 }
 
 /**
@@ -84,11 +115,10 @@ async function handleHouseRoomWebSocket(request, env, url) {
   }
 
   // Extract houseId from path
-  const pathParts = url.pathname.split('/');
-  const houseIdStr = pathParts[3]; // /ws/house/:houseId
-  const houseId = parseInt(houseIdStr);
+  const match = url.pathname.match(/^\/ws\/house\/([1-9]\d*)$/);
+  const houseId = match ? Number(match[1]) : NaN;
 
-  if (!houseId || isNaN(houseId)) {
+  if (!Number.isSafeInteger(houseId) || houseId <= 0) {
     return json({ error: 'Invalid house ID' }, 400);
   }
 
@@ -145,59 +175,50 @@ export default {
         executedAt: now,
         deletedRows: result.meta?.changes ?? 0
       });
+
+      const logCleanup = await env.DB.prepare(`
+        DELETE FROM logs
+        WHERE datetime(timestamp) < datetime('now', '-90 days')
+      `).run();
+      console.log('[CRON] Audit log retention completed', {
+        executedAt: now,
+        deletedRows: logCleanup.meta?.changes ?? 0
+      });
     } catch (error) {
-      console.error('[CRON] WebSocket ticket cleanup failed:', error);
+      console.error('[CRON] Scheduled cleanup failed:', error);
       throw error;
     }
   },
 
   async fetch(request, env) {
     const allowOrigin = getAllowOrigin(request);
+    const requestOrigin = request.headers.get('Origin');
+
+    if (requestOrigin && !allowOrigin) {
+      return json({ error: 'Origin not allowed' }, 403);
+    }
 
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
         headers: {
-          'Access-Control-Allow-Origin': allowOrigin,
+          ...(allowOrigin ? { 'Access-Control-Allow-Origin': allowOrigin } : {}),
+          'Vary': 'Origin',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'X-Content-Type-Options': 'nosniff'
         }
       });
     }
 
     const url = new URL(request.url);
 
-    // Serve static files (index.html, etc.)
+    // Static files are served by the Workers Assets binding in production.
     if (url.pathname === '/' || url.pathname === '/index.html') {
-      try {
-        // Try ASSETS binding first (production)
-       // Serve static files through the Cloudflare Assets binding.
-      if (url.pathname === '/' || url.pathname === '/index.html') {
-          if (env.ASSETS) {
-              return env.ASSETS.fetch(request);
-          }
-
-        return new Response('Static Assets binding is unavailable.', {
-          status: 500,
-          headers: {
-          'Content-Type': 'text/plain',
-          'Cache-Control': 'no-store'
-        }
-        });
-      }
-      } catch (e) {
-        // Fall through to serve fallback
-      }
-      
-      // Fallback HTML for development (no ASSETS binding)
-      const fallbackHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rental Management</title></head><body><h1>Internal server error!</h1></body></html>';
-      
-      return new Response(fallbackHTML, {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/html',
-          'Cache-Control': 'no-cache'
-        }
+      if (env.ASSETS) return env.ASSETS.fetch(request);
+      return new Response('Static assets are unavailable. Run the frontend build first.', {
+        status: 503,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
       });
     }
 
@@ -231,6 +252,14 @@ export default {
 
       if (url.pathname === '/api/reset_password' && request.method === 'POST') {
         return withCors(await resetPassword(request, env), allowOrigin);
+      }
+
+      if (url.pathname === '/api/password-reset/request' && request.method === 'POST') {
+        return withCors(await requestPasswordResetCode(request, env), allowOrigin);
+      }
+
+      if (url.pathname === '/api/password-reset/confirm' && request.method === 'POST') {
+        return withCors(await confirmPasswordResetCode(request, env), allowOrigin);
       }
 
       if (url.pathname === '/api/refresh' && request.method === 'POST') {
@@ -270,12 +299,16 @@ export default {
     allowOrigin
   );
 }
+      if (url.pathname === '/api/logs' && request.method === 'GET') {
+        return withCors(await listAuditLogs(request, env, authUser.user), allowOrigin);
+      }
+
       if (
   url.pathname === '/api/provisioning/register' &&
   request.method === 'POST'
 ) {
   return withCors(
-    await registerProvisionedAccount(request, env, authUser.user),
+    await registerManagedUser(request, env, authUser.user),
     allowOrigin
   );
 }
@@ -285,13 +318,36 @@ export default {
       }
 
       if (url.pathname === '/api/accounts' && request.method === 'GET') {
-        return withCors(await listManagedAccounts(request, env, authUser.user), allowOrigin);
+        return withCors(await listManagedUsers(request, env, authUser.user), allowOrigin);
       }
 
       const accountMatch = url.pathname.match(/^\/api\/accounts\/(\d+)$/);
       if (accountMatch && request.method === 'PUT') {
         return withCors(
-          await updateManagedAccount(request, env, authUser.user, accountMatch[1]),
+          await updateManagedUser(request, env, authUser.user, accountMatch[1]),
+          allowOrigin
+        );
+      }
+
+      if (accountMatch && request.method === 'DELETE') {
+        return withCors(
+          await deleteManagedUser(request, env, authUser.user, accountMatch[1]),
+          allowOrigin
+        );
+      }
+
+      const accountSuspendMatch = url.pathname.match(/^\/api\/accounts\/(\d+)\/suspend$/);
+      if (accountSuspendMatch && request.method === 'POST') {
+        return withCors(
+          await suspendManagedUser(request, env, authUser.user, accountSuspendMatch[1]),
+          allowOrigin
+        );
+      }
+
+      const accountReactivateMatch = url.pathname.match(/^\/api\/accounts\/(\d+)\/reactivate$/);
+      if (accountReactivateMatch && request.method === 'POST') {
+        return withCors(
+          await reactivateManagedUser(request, env, authUser.user, accountReactivateMatch[1]),
           allowOrigin
         );
       }
@@ -302,7 +358,7 @@ export default {
 
 if (accountResetMatch && request.method === 'POST') {
   return withCors(
-    await resetManagedAccountPassword(
+    await resetManagedUserPassword(
       request,
       env,
       authUser.user,
@@ -312,18 +368,23 @@ if (accountResetMatch && request.method === 'POST') {
   );
 }
 
-      if (url.pathname === '/api/houses' && request.method === 'POST') {
+      const normalizedHousePath = url.pathname.startsWith('/api/properties')
+        ? url.pathname.replace(/^\/api\/properties/, '/api/houses')
+        : url.pathname;
+
+      if ((url.pathname === '/api/properties' || url.pathname === '/api/houses') && request.method === 'POST') {
         return withCors(await createHouse(request, env, authUser.user), allowOrigin);
       }
 
-      if (url.pathname === '/api/houses' && request.method === 'GET') {
+      if ((url.pathname === '/api/properties' || url.pathname === '/api/houses') && request.method === 'GET') {
         return withCors(await listHouses(request, env, authUser.user), allowOrigin);
       }
 
-      if (url.pathname.startsWith('/api/houses/')) {
+      if (url.pathname.startsWith('/api/properties/') || url.pathname.startsWith('/api/houses/')) {
+        const routePath = normalizedHousePath;
 
-                // House access management
-        const houseAccessMatch = url.pathname.match(
+        // House access management
+        const houseAccessMatch = routePath.match(
           /^\/api\/houses\/(\d+)\/access(?:\/(\d+))?$/
         );
 
@@ -383,24 +444,12 @@ if (accountResetMatch && request.method === 'POST') {
           );
         }
 
-
-        const pathParts = url.pathname.split('/').filter(Boolean);
-        const isHouseDevicesRoute = /^\/api\/houses\/\d+\/devices$/.test(url.pathname);
+        const pathParts = routePath.split('/').filter(Boolean);
+        const isHouseDevicesRoute = /^\/api\/houses\/\d+\/devices$/.test(routePath);
 
         if (isHouseDevicesRoute && request.method === 'GET') {
-      
           const houseId = pathParts[2];
-          const result = await listHouseDevices(env, authUser.user, houseId);
-
-return withCors(
-  json(
-    result.error
-      ? { error: result.error }
-      : { devices: result.data },
-    result.status
-  ),
-  allowOrigin
-);
+          return withCors(await listHouseDevices(request, env, authUser.user, houseId), allowOrigin);
         }
 
         if (isHouseDevicesRoute && request.method === 'POST') {
@@ -419,7 +468,7 @@ return withCors(
           const mergedRequest = new Request(request.url, {
             method: request.method,
             headers: request.headers,
-            body: JSON.stringify({ ...payload, house_id: Number(houseId) })
+            body: JSON.stringify({ ...payload, property_id: Number(houseId), house_id: Number(houseId) })
           });
 
           return withCors(await createDevice(mergedRequest, env, authUser.user), allowOrigin);
@@ -515,10 +564,10 @@ return withCors(
         }
       }
 
-      return withCors(new Response('Rental Management Worker is running!', { status: 200 }), allowOrigin);
+      return withCors(json({ error: 'Route not found' }, 404), allowOrigin);
     } catch (error) {
-      console.error(error);
-      return withCors(json({ error: error.message }, 500), allowOrigin);
+      console.error('[Worker] Unhandled request error:', error);
+      return withCors(json({ error: 'Internal server error' }, 500), allowOrigin);
     }
   }
 };

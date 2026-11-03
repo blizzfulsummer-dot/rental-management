@@ -1,4 +1,6 @@
 import { parseJsonBody, validateId } from './lib/validation.js';
+import { writeAuditLog } from './lib/auditLog.js';
+import { syncFingerprintAuthorizations } from './lib/fingerprintAuthorization.js';
 
 async function getDevice(env, deviceId) {
   return env.DB.prepare(`
@@ -63,10 +65,23 @@ export async function startFingerprintEnrollment(env, authUser, deviceId) {
     if (!(await canAccessDevice(env, authUser, device))) return json({ error: 'Forbidden' }, 403);
 
     const current = await env.DB
-      .prepare('SELECT fingerprint_id, status, enrollment_pending FROM device_fingerprint_enrollments WHERE device_id = ? AND user_id = ?')
+      .prepare('SELECT fingerprint_id, status, enrollment_pending, pending_expires_at FROM device_fingerprint_enrollments WHERE device_id = ? AND user_id = ?')
       .bind(device.id, authUser.id)
       .first();
-    if (current?.enrollment_pending) return json({ error: 'Fingerprint enrollment is already in progress' }, 409);
+    if (current?.enrollment_pending) {
+      const expiresAt = Date.parse(current.pending_expires_at || '');
+      if (Number.isFinite(expiresAt) && expiresAt > Date.now()) {
+        return json({ error: 'Fingerprint enrollment is already in progress' }, 409);
+      }
+      // Recover an abandoned reservation so a browser crash or lost network
+      // connection cannot permanently lock the user's fingerprint slot.
+      await env.DB.prepare(`
+        UPDATE device_fingerprint_enrollments
+        SET status = CASE WHEN status = 'pending' THEN 'disabled' ELSE status END,
+            enrollment_pending = 0, pending_expires_at = NULL, updated_at = ?
+        WHERE device_id = ? AND user_id = ? AND enrollment_pending = 1
+      `).bind(new Date().toISOString(), device.id, authUser.id).run();
+    }
 
     let fingerprintId;
     if (current) {
@@ -74,9 +89,9 @@ export async function startFingerprintEnrollment(env, authUser, deviceId) {
       await env.DB.prepare(`
         UPDATE device_fingerprint_enrollments
         SET status = CASE WHEN status = 'disabled' THEN 'pending' ELSE status END,
-            enrollment_pending = 1, updated_at = ?
+            enrollment_pending = 1, pending_expires_at = ?, updated_at = ?
         WHERE device_id = ? AND user_id = ?
-      `).bind(new Date().toISOString(), device.id, authUser.id).run();
+      `).bind(new Date(Date.now() + 2 * 60 * 1000).toISOString(), new Date().toISOString(), device.id, authUser.id).run();
     } else {
       const available = await env.DB.prepare(`
         WITH RECURSIVE ids(value) AS (
@@ -101,9 +116,9 @@ export async function startFingerprintEnrollment(env, authUser, deviceId) {
       const now = new Date().toISOString();
       await env.DB.prepare(`
         INSERT INTO device_fingerprint_enrollments
-          (device_id, user_id, fingerprint_id, status, enrollment_pending, created_at, updated_at)
-        VALUES (?, ?, ?, 'pending', 1, ?, ?)
-      `).bind(device.id, authUser.id, fingerprintId, now, now).run();
+          (device_id, user_id, fingerprint_id, status, enrollment_pending, pending_expires_at, created_at, updated_at)
+        VALUES (?, ?, ?, 'pending', 1, ?, ?, ?)
+      `).bind(device.id, authUser.id, fingerprintId, new Date(Date.now() + 2 * 60 * 1000).toISOString(), now, now).run();
     }
 
     return json({
@@ -114,6 +129,9 @@ export async function startFingerprintEnrollment(env, authUser, deviceId) {
       replacing: Boolean(current)
     }, 201);
   } catch (error) {
+    if (/unique constraint|constraint failed/i.test(String(error?.message || ''))) {
+      return json({ error: 'A fingerprint slot was reserved by another request. Refresh and try again.' }, 409);
+    }
     console.error('Start fingerprint enrollment error:', error);
     return json({ error: 'Failed to reserve a fingerprint slot' }, 500);
   }
@@ -134,7 +152,7 @@ export async function cancelFingerprintEnrollment(env, authUser, deviceId) {
     `).bind(device.id, authUser.id).run();
     await env.DB.prepare(`
       UPDATE device_fingerprint_enrollments
-      SET enrollment_pending = 0, updated_at = ?
+      SET enrollment_pending = 0, pending_expires_at = NULL, updated_at = ?
       WHERE device_id = ? AND user_id = ? AND status != 'pending' AND enrollment_pending = 1
     `).bind(new Date().toISOString(), device.id, authUser.id).run();
     return json({ success: true });
@@ -166,7 +184,7 @@ export async function removeFingerprintEnrollment(request, env, authUser, device
     if (!(await canAccessDevice(env, authUser, device))) return json({ error: 'Forbidden' }, 403);
 
     const enrollment = await env.DB.prepare(`
-      SELECT fingerprint_id FROM device_fingerprint_enrollments
+      SELECT fingerprint_id, user_id FROM device_fingerprint_enrollments
       WHERE device_id = ? AND fingerprint_id = ?
     `).bind(device.id, fingerprintValidation.value).first();
     if (!enrollment) return json({ error: 'Fingerprint enrollment not found' }, 404);
@@ -174,7 +192,7 @@ export async function removeFingerprintEnrollment(request, env, authUser, device
     if (action === 'disable') {
       await env.DB.prepare(`
         UPDATE device_fingerprint_enrollments
-        SET status = 'disabled', enrollment_pending = 0, updated_at = ?
+        SET status = 'disabled', enrollment_pending = 0, pending_expires_at = NULL, updated_at = ?
         WHERE device_id = ? AND fingerprint_id = ?
       `).bind(new Date().toISOString(), device.id, fingerprintValidation.value).run();
     } else {
@@ -182,7 +200,26 @@ export async function removeFingerprintEnrollment(request, env, authUser, device
         .bind(device.id, fingerprintValidation.value).run();
     }
 
-    return json({ success: true, action });
+    const authorizationSyncPending = env.HOUSE_ROOM
+      ? !(await syncFingerprintAuthorizations(
+          env,
+          device.id,
+          Number(device.house_id)
+        ))
+      : false;
+    await writeAuditLog(env, {
+      userId: enrollment.user_id ?? null,
+      deviceId: device.id,
+      action: `fingerprint.${action}`,
+      outcome: 'success',
+      source: 'dashboard',
+      details: {
+        fingerprintId: fingerprintValidation.value,
+        changedBy: authUser.id
+      }
+    });
+
+    return json({ success: true, action, authorizationSyncPending });
   } catch (error) {
     console.error('Remove fingerprint enrollment error:', error);
     return json({ error: 'Failed to remove fingerprint enrollment' }, 500);

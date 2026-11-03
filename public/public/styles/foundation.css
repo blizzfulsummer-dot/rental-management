@@ -1,0 +1,474 @@
+:root {
+      --bg: #eef4ff;
+      --panel: #ffffff;
+      --panel-soft: #f7f9ff;
+      --primary: #3b82f6;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #dfe7ff;
+      --shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(135deg, #e0ecff 0%, #f3f6ff 50%, #eef2ff 100%);
+      color: var(--text);
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    .screen {
+      display: none;
+      min-height: 100vh;
+      padding: 28px;
+    }
+    .screen.active { display: block; }
+
+    .login-shell {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+
+    .login-card {
+      width: min(100%, 420px);
+      background: rgba(255,255,255,0.96);
+      border: 1px solid rgba(148,163,184,0.28);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 32px 28px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    h1, h2, h3, h4, p { margin-top: 0; }
+    .login-card h1 {
+      font-size: clamp(2rem, 3vw, 2.5rem);
+      margin-bottom: 8px;
+    }
+
+    .subtle {
+      color: var(--muted);
+      margin-bottom: 26px;
+      line-height: 1.5;
+    }
+
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .field input, .field select {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+    }
+    .field input:focus, .field select:focus {
+      outline: 2px solid rgba(59,130,246,0.25);
+      border-color: var(--primary);
+    }
+
+    .primary-btn, .secondary-btn, .ghost-btn {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    }
+    .primary-btn {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      box-shadow: 0 12px 18px rgba(59,130,246,0.18);
+      width: 100%;
+    }
+    .secondary-btn {
+      background: linear-gradient(135deg, #22c55e, #15803d);
+      color: white;
+    }
+    .ghost-btn {
+      background: #eef4ff;
+      color: var(--primary-dark);
+    }
+    button:hover { transform: translateY(-1px); }
+    bbutton:disabled {
+  opacity: 0.7;
+  cursor: default !important;
+}
+
+    .alert {
+      display: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      margin-top: 18px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .alert.show { display: block; }
+    .alert.error {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+    .alert.success {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+
+    .topbar {
+      max-width: 1200px;
+      margin: 0 auto 20px;
+      background: rgba(255,255,255,0.88);
+      border: 1px solid rgba(148,163,184,0.2);
+      border-radius: 18px;
+      padding: 18px 22px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      box-shadow: var(--shadow);
+    }
+
+    .brand {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .user-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .role-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .dashboard {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding-bottom: 36px;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 18px;
+      margin: 24px 0;
+    }
+
+    .stat-card {
+      background: var(--panel);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .stat-label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+    .stat-value {
+      font-size: clamp(1.7rem, 2vw, 2.3rem);
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .list-grid, .card-grid {
+      display: grid;
+      gap: 14px;
+    }
+    .card-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .house-card, .tenant-card, .device-card, .profile-card {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--panel-soft);
+      padding: 16px;
+    }
+
+    .house-card h3, .tenant-card h3, .device-card h3 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #e0f2fe;
+      color: #0369a1;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .inline-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .mini-btn {
+      border: none;
+      background: #e0ecff;
+      color: var(--primary-dark);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .mini-btn.danger {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .profile-card {
+      display: grid;
+      gap: 10px;
+    }
+    .profile-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(148,163,184,0.25);
+    }
+    .profile-line:last-child { border-bottom: none; }
+    .label { color: var(--muted); }
+
+    .device-status {
+      display: inline-block;
+      padding: 5px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .device-status.online {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .device-status.offline {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .password-form {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .password-required-dialog {
+      width: min(100% - 32px, 460px);
+      padding: 28px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--text);
+      box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+    }
+    .password-required-dialog::backdrop { background: rgba(15, 23, 42, 0.68); }
+    .password-required-form { display: grid; gap: 14px; }
+    .password-required-form .field { margin: 0; }
+    .password-required-form input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .password-required-form .alert { margin-top: 0; }
+
+    .tenant-registration-form {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 24px;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--panel-soft);
+    }
+    .tenant-form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .tenant-registration-form .field { margin-bottom: 0; }
+    .tenant-registration-form .primary-btn { width: auto; justify-self: start; }
+
+    .view-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 20px 0 18px;
+    }
+
+    .view-tab {
+      border: 1px solid var(--border);
+      background: #f8faff;
+      color: var(--text);
+      border-radius: 999px;
+      padding: 9px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .view-tab.active {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      border-color: transparent;
+      box-shadow: 0 10px 18px rgba(59,130,246,0.18);
+    }
+
+    .empty {
+      border: 1px dashed var(--border);
+      border-radius: 16px;
+      padding: 22px;
+      color: var(--muted);
+      text-align: center;
+      background: rgba(255,255,255,0.4);
+    }
+    .house-selector {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .house-selector select {
+      min-width: min(100%, 260px);
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: white;
+      color: var(--text);
+      font: inherit;
+    }
+    .device-edit-form {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .device-edit-form input, .device-edit-form select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+    }
+    .pairing-key-panel {
+      margin: 14px 0;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #eff6ff;
+    }
+    .pairing-key-panel code {
+      display: block;
+      margin: 10px 0;
+      padding: 10px;
+      overflow-wrap: anywhere;
+      background: white;
+      border-radius: 8px;
+    }
+
+    .house-selector {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .house-selector select {
+      min-width: min(100%, 260px);
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: white;
+      color: var(--text);
+      font: inherit;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .dashboard { padding: 0 10px 24px; }
+      .topbar { flex-direction: column; align-items: flex-start; }
+      .view-tabs { margin-top: 10px; }
+    }
+
+    

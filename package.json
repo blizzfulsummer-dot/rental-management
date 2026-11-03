@@ -4,11 +4,15 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"deploy": "wrangler deploy",
-		"dev": "wrangler dev",
-		"start": "wrangler dev",
-		"build": "wrangler deploy --dry-run",
+		"deploy": "npm run build:frontend && wrangler deploy",
+		"dev": "npm run build:frontend && wrangler dev --config wrangler.local.jsonc",
+		"start": "npm run build:frontend && wrangler dev --config wrangler.local.jsonc",
+		"build": "npm run build:frontend && wrangler deploy --dry-run",
+		"build:frontend": "node scripts/build-frontend.js",
 		"test": "node --test",
+		"db:setup:local": "wrangler d1 migrations apply reman-local --local --config wrangler.local.jsonc && wrangler d1 execute reman-local --local --file=./scripts/local-demo-accounts.sql --config wrangler.local.jsonc",
+		"db:migrate:local": "wrangler d1 migrations apply reman-local --local --config wrangler.local.jsonc",
+		"db:seed:local": "wrangler d1 execute reman-local --local --file=./scripts/local-demo-accounts.sql --config wrangler.local.jsonc",
 		"device:sim": "node device-simulator.js"
 	},
 	"devDependencies": {

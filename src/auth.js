@@ -1,7 +1,11 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { parseJsonBody, validateEmail, validateId, validateLoginPayload, validatePassword, validateSignupPayload, validateTenantPayload, sanitizeString } from './lib/validation.js';
 import { hashPBKDF2, verifyPBKDF2, verifyLegacy, fakeVerify, arrayBufferToHex, hexToArrayBuffer, generateTempPassword } from './lib/crypto.js';
-import { sendTemporaryPasswordEmail } from './lib/email.js';
+import { sendTemporaryPasswordEmail, sendPasswordResetCodeEmail } from './lib/email.js';
+import { getSecretBytes, getSecretString } from './lib/secrets.js';
+
+import { getUserAccountState } from './modules/account-status.js';
+import { writeAuditLog } from './lib/auditLog.js';
 
 export async function signup(request, env) {
   const parsed = await parseJsonBody(request);
@@ -34,6 +38,7 @@ export async function signup(request, env) {
   let tempPasswordExpires = null;
   let tenantHouseId = null;
   let tenantCreator = null;
+  let adminSignupKeyId = null;
 
   if (role === 'tenant' || role === 'user') {
     const authResult = await getAuthUser(request, env);
@@ -49,14 +54,15 @@ export async function signup(request, env) {
       const tenantValidation = validateTenantPayload(payload);
       if (!tenantValidation.ok) return json({ error: 'Invalid tenant fields', details: tenantValidation.errors }, 400);
 
-      if (payload.house_id !== undefined && payload.house_id !== null && payload.house_id !== '') {
-        const houseValidation = validateId(payload.house_id);
-        if (!houseValidation.ok) return json({ error: 'Invalid house ID' }, 400);
-        tenantHouseId = houseValidation.value;
+      const tenantPropertyId = payload.property_id ?? payload.house_id;
+      if (tenantPropertyId !== undefined && tenantPropertyId !== null && tenantPropertyId !== '') {
+        const propertyValidation = validateId(tenantPropertyId);
+        if (!propertyValidation.ok) return json({ error: 'Invalid property ID' }, 400);
+        tenantHouseId = propertyValidation.value;
       }
 
       if (tenantCreator.role === 'owner' && !tenantHouseId) {
-        return json({ error: 'house_id is required for owner-created tenants' }, 400);
+        return json({ error: 'property_id is required for owner-created tenants' }, 400);
       }
     }
 
@@ -65,10 +71,17 @@ export async function signup(request, env) {
     mustChangePassword = 1;
     tempPasswordExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   } else if (role === 'admin') {
-    if (!payload.code) return json({ error: 'Code is required for admin signup' }, 400);
+    if (typeof payload.code !== 'string' || !payload.code.trim()) return json({ error: 'A valid administrator registration code is required' }, 403);
     if (!payload.password) return json({ error: 'Password is required' }, 400);
     const passwordValidation = validatePassword(payload.password);
     if (!passwordValidation.ok) return json({ error: 'Password is too weak' }, 400);
+    // Admin creation is intentionally public only when a real, unused one-time
+    // registration key exists. A non-empty arbitrary string is not sufficient.
+    const signupKey = await env.DB.prepare(
+      'SELECT id FROM signup_keys WHERE code = ? AND used = 0'
+    ).bind(payload.code.trim()).first();
+    if (!signupKey) return json({ error: 'Invalid or already-used administrator registration code' }, 403);
+    adminSignupKeyId = signupKey.id;
     finalPassword = payload.password;
   } else {
     if (!payload.password) return json({ error: 'Password is required' }, 400);
@@ -86,7 +99,7 @@ export async function signup(request, env) {
         return json({
           error: tenantCreator.role === 'owner'
             ? 'You can only register tenants for houses you own'
-            : 'House not found'
+            : 'Property not found'
         }, tenantCreator.role === 'owner' ? 403 : 404);
       }
     }
@@ -98,6 +111,15 @@ export async function signup(request, env) {
     const hashHex = arrayBufferToHex(derivedBits);
     const saltHex = arrayBufferToHex(salt);
 
+    if (adminSignupKeyId !== null) {
+      const consumed = await env.DB.prepare(
+        'UPDATE signup_keys SET used = 1 WHERE id = ? AND used = 0'
+      ).bind(adminSignupKeyId).run();
+      if (consumed.meta?.changes !== 1) {
+        return json({ error: 'Administrator registration code has already been used' }, 409);
+      }
+    }
+
     const userInsert = await env.DB
       .prepare('INSERT INTO users (email, password_hash, password_salt, role, created_at, name, requires_change_password, temp_password_expiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(normalizedEmail, hashHex, saltHex, role, new Date().toISOString(), sanitizedName, mustChangePassword, tempPasswordExpires)
@@ -105,6 +127,11 @@ export async function signup(request, env) {
 
     const userId = userInsert.meta?.last_row_id;
     if (!userId) return json({ error: 'Failed to create user' }, 500);
+
+    if (adminSignupKeyId !== null) {
+      await env.DB.prepare('UPDATE signup_keys SET user_id = ? WHERE id = ?')
+        .bind(userId, adminSignupKeyId).run();
+    }
 
     if (role === 'tenant') {
       await env.DB
@@ -145,7 +172,7 @@ let emailSent = false;
 
 if (tempPassword) {
   try {
-    await sendTemporaryPasswordEmail({
+    const emailResult = await sendTemporaryPasswordEmail({
       env,
       name: sanitizedName || normalizedEmail,
       email: normalizedEmail,
@@ -153,7 +180,7 @@ if (tempPassword) {
       tempPassword
     });
 
-    emailSent = true;
+    emailSent = Boolean(emailResult);
   } catch (emailError) {
     console.error('Temporary password email failed:', emailError);
   }
@@ -175,560 +202,6 @@ return json({
     return json({ error: 'Failed to create user', details: error.message }, 500);
   }
 }
-
-
-export async function registerProvisionedAccount(request, env, authUser) {
-
-
-  if (!authUser?.id || !['admin', 'owner'].includes(String(authUser.role).toLowerCase())) {
-    return json({ error: 'You are not authorized to register accounts' }, 403);
-  }
-
-  const parsed = await parseJsonBody(request);
-  if (!parsed.ok) return json({ error: parsed.error }, 400);
-
-  const payload = parsed.data || {};
-  const creatorRole = String(authUser.role).toLowerCase();
-  const role = String(payload.role || '').trim().toLowerCase();
-
-  if (!['user', 'tenant', 'owner'].includes(role)) {
-    return json({ error: 'Invalid account role' }, 400);
-  }
-
-  if (role === 'owner' && creatorRole !== 'admin') {
-    return json({ error: 'Only admins can register owners' }, 403);
-  }
-
-  const nameResult = sanitizeString(payload.name, 'name', 100);
-  if (!nameResult.ok) {
-    return json({ error: nameResult.error }, 400);
-  }
-
-  const emailResult = validateEmail(payload.email);
-  if (!emailResult.ok) {
-    return json({ error: 'Invalid email address' }, 400);
-  }
-
-  const normalizedEmail = String(payload.email).trim().toLowerCase();
-  let tenantHouseId = null;
-
-  if (role === 'tenant') {
-    const tenantValidation = validateTenantPayload(payload);
-
-    if (!tenantValidation.ok) {
-      return json({
-        error: 'Invalid tenant information',
-        details: tenantValidation.errors
-      }, 400);
-    }
-
-    const houseValidation = validateId(payload.house_id);
-
-    if (!houseValidation.ok) {
-      return json({ error: 'A valid house is required for tenant registration' }, 400);
-    }
-
-    tenantHouseId = houseValidation.value;
-
-    const onboardDate = new Date(payload.onboard_date);
-    if (Number.isNaN(onboardDate.getTime())) {
-      return json({ error: 'Invalid tenant move-in date' }, 400);
-    }
-
-    const house = creatorRole === 'owner'
-      ? await env.DB.prepare(
-          'SELECT id FROM houses WHERE id = ? AND owner_id = ?'
-        ).bind(tenantHouseId, authUser.id).first()
-      : await env.DB.prepare(
-          'SELECT id FROM houses WHERE id = ?'
-        ).bind(tenantHouseId).first();
-
-    if (!house) {
-      return json({
-        error: creatorRole === 'owner'
-          ? 'You can only register tenants for houses you own'
-          : 'House not found'
-      }, creatorRole === 'owner' ? 403 : 404);
-    }
-  }
-
-   let provisionedHouseIds = [];
-  if (role === 'user') {
-    provisionedHouseIds = Array.isArray(payload.house_ids)
-      ? [...new Set(payload.house_ids.map(Number))]
-      : (payload.house_id ? [Number(payload.house_id)] : []);
-    if (!provisionedHouseIds.length || provisionedHouseIds.some(id => !Number.isSafeInteger(id) || id <= 0)) {
-      return json({ error: 'At least one valid property is required for a regular user' }, 400);
-    }
-    for (const houseId of provisionedHouseIds) {
-      const house = creatorRole === 'owner'
-        ? await env.DB.prepare('SELECT id FROM houses WHERE id = ? AND owner_id = ?').bind(houseId, authUser.id).first()
-        : await env.DB.prepare('SELECT id FROM houses WHERE id = ?').bind(houseId).first();
-      if (!house) return json({ error: creatorRole === 'owner'
-        ? 'You can only assign users to properties you own'
-        : 'Property not found' }, creatorRole === 'owner' ? 403 : 404);
-    }
-  }
-
-  let createdUserId = null;
-
-  try {
-    const existing = await env.DB.prepare(
-      'SELECT id FROM users WHERE email = ?'
-    ).bind(normalizedEmail).first();
-
-    if (existing) {
-      return json({ error: 'Email already exists' }, 409);
-    }
-
-    const tempPassword = generateTempPassword();
-    const { hash, salt } = await hashPBKDF2(tempPassword);
-
-    const now = new Date().toISOString();
-    const expiration = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-    const userInsert = await env.DB.prepare(`
-      INSERT INTO users (
-        email,
-        password_hash,
-        password_salt,
-        role,
-        created_at,
-        name,
-        requires_change_password,
-        temp_password_expiration
-      )
-      VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-    `).bind(
-      normalizedEmail,
-      arrayBufferToHex(hash),
-      arrayBufferToHex(salt),
-      role,
-      now,
-      nameResult.value,
-      expiration
-    ).run();
-
-    createdUserId = userInsert.meta?.last_row_id;
-
-    if (!createdUserId) {
-      throw new Error('Could not retrieve the newly created user ID');
-    }
-
-    if (role === 'tenant') {
-      await env.DB.prepare(`
-        INSERT INTO tenants (
-          user_id,
-          balance,
-          deposit,
-          rent_amount,
-          billing_cycle,
-          leased_unit,
-          onboard_date,
-          created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        createdUserId,
-        Number(payload.balance),
-        Number(payload.deposit),
-        Number(payload.rent_amount),
-        String(payload.billing_cycle).trim(),
-        String(payload.leased_unit).trim(),
-        new Date(payload.onboard_date).toISOString(),
-        now
-      ).run();
-
-      // Both admins and owners must create the tenant's house access.
-      await env.DB.prepare(`
-        INSERT INTO user_house_access (
-          user_id,
-          house_id,
-          access_level,
-          created_at
-        )
-        VALUES (?, ?, 'tenant', ?)
-      `).bind(createdUserId, tenantHouseId, now).run();
-    }
-
-    if (role === 'user') {
-      for (const houseId of provisionedHouseIds) {
-        await env.DB.prepare(`
-          INSERT OR IGNORE INTO user_house_access (user_id, house_id, access_level, created_at)
-          VALUES (?, ?, 'viewer', ?)
-        `).bind(createdUserId, houseId, now).run();
-      }
-    }
-
-    let emailSent = false;
-
-try {
-  await sendTemporaryPasswordEmail({
-    env,
-    name: nameResult.value,
-    email: normalizedEmail,
-    role,
-    tempPassword
-  });
-
-  emailSent = true;
-} catch (emailError) {
-  console.error('Temporary password email failed:', emailError.message);
-}
-
-    return json({
-  success: true,
-  message: emailSent
-    ? `${role.charAt(0).toUpperCase() + role.slice(1)} account created and credentials emailed successfully`
-    : 'Account created, but email delivery failed. Use the temporary password below.',
-  emailSent,
-  tempPassword,
-  user: {
-    id: createdUserId,
-    name: nameResult.value,
-    email: normalizedEmail,
-    role
-  }
-});
-
-  } catch (error) {
-    console.error('Account provisioning error:', error);
-
-    // Remove partial records if tenant creation or access assignment failed.
-    if (createdUserId) {
-      try {
-        await env.DB.prepare(
-          'DELETE FROM user_house_access WHERE user_id = ?'
-        ).bind(createdUserId).run();
-
-        await env.DB.prepare(
-          'DELETE FROM tenants WHERE user_id = ?'
-        ).bind(createdUserId).run();
-
-        await env.DB.prepare(
-          'DELETE FROM users WHERE id = ?'
-        ).bind(createdUserId).run();
-      } catch (cleanupError) {
-        console.error('Provisioning cleanup error:', cleanupError);
-      }
-    }
-
-    return json({ error: 'Failed to register account' }, 500);
-  }
-}
-
-export async function listManagedAccounts(request, env, authUser) {
-  const actorRole = String(authUser?.role || '').toLowerCase();
-  if (!['admin', 'owner'].includes(actorRole)) {
-    return json({ error: 'Forbidden' }, 403);
-  }
-
-  try {
-    const rows = actorRole === 'admin'
-      ? await env.DB.prepare(`
-          SELECT u.id, u.name, u.email, u.role,
-                 t.id AS tenant_id, t.balance, t.deposit, t.rent_amount,
-                 t.billing_cycle, t.leased_unit, t.onboard_date
-          FROM users u
-          LEFT JOIN tenants t ON t.user_id = u.id
-          WHERE u.role IN ('owner', 'tenant', 'user')
-          ORDER BY CASE u.role WHEN 'owner' THEN 0 WHEN 'tenant' THEN 1 ELSE 2 END,
-                   COALESCE(u.name, u.email)
-        `).all()
-      : await env.DB.prepare(`
-          SELECT DISTINCT u.id, u.name, u.email, u.role,
-                 t.id AS tenant_id, t.balance, t.deposit, t.rent_amount,
-                 t.billing_cycle, t.leased_unit, t.onboard_date
-          FROM users u
-          LEFT JOIN tenants t ON t.user_id = u.id
-          WHERE u.role IN ('tenant', 'user')
-            AND (
-              EXISTS (
-                SELECT 1 FROM user_house_access uha
-                JOIN houses h ON h.id = uha.house_id
-                WHERE uha.user_id = u.id AND h.owner_id = ?
-              ) OR EXISTS (
-                SELECT 1 FROM user_device_access uda
-                JOIN devices d ON d.id = uda.device_id
-                JOIN houses h ON h.id = d.house_id
-                WHERE uda.user_id = u.id AND h.owner_id = ?
-              )
-            )
-          ORDER BY CASE u.role WHEN 'tenant' THEN 0 ELSE 1 END,
-                   COALESCE(u.name, u.email)
-        `).bind(authUser.id, authUser.id).all();
-
-    const accounts = [];
-    for (const row of rows.results || []) {
-      const access = await env.DB.prepare(`
-        SELECT h.id, h.name
-        FROM user_house_access uha
-        JOIN houses h ON h.id = uha.house_id
-        WHERE uha.user_id = ?
-        ORDER BY h.name
-      `).bind(row.id).all();
-      accounts.push({
-        ...row,
-        house_ids: (access.results || []).map(h => h.id),
-        house_names: (access.results || []).map(h => h.name)
-      });
-    }
-    return json({ accounts });
-  } catch (error) {
-    console.error('List managed accounts error:', error);
-    return json({ error: 'Failed to fetch accounts' }, 500);
-  }
-}
-
-export async function updateManagedAccount(request, env, authUser, targetUserId) {
-  const actorRole = String(authUser?.role || '').toLowerCase();
-  if (!['admin', 'owner'].includes(actorRole)) return json({ error: 'Forbidden' }, 403);
-
-  const id = Number(targetUserId);
-  if (!Number.isSafeInteger(id) || id <= 0) return json({ error: 'Invalid account ID' }, 400);
-
-  const parsed = await parseJsonBody(request);
-  if (!parsed.ok) return json({ error: parsed.error }, 400);
-  const payload = parsed.data || {};
-
-  try {
-    const target = await env.DB.prepare(
-      'SELECT id, name, email, role FROM users WHERE id = ?'
-    ).bind(id).first();
-    if (!target) return json({ error: 'Account not found' }, 404);
-
-    const targetRole = String(target.role || '').toLowerCase();
-    if (!['owner', 'tenant', 'user'].includes(targetRole)) {
-      return json({ error: 'This account role cannot be edited here' }, 403);
-    }
-    if (actorRole === 'owner') {
-      if (targetRole === 'owner') return json({ error: 'Owners cannot edit owner accounts' }, 403);
-      const managed = await env.DB.prepare(`
-        SELECT 1 FROM user_house_access uha
-        JOIN houses h ON h.id = uha.house_id
-        WHERE uha.user_id = ? AND h.owner_id = ?
-        UNION
-        SELECT 1 FROM user_device_access uda
-        JOIN devices d ON d.id = uda.device_id
-        JOIN houses h ON h.id = d.house_id
-        WHERE uda.user_id = ? AND h.owner_id = ?
-        LIMIT 1
-      `).bind(id, authUser.id, id, authUser.id).first();
-      if (!managed) return json({ error: 'You can only edit accounts assigned to your properties' }, 403);
-    }
-
-    // Role changes are intentionally not supported: converting tenant/user/owner
-    // can invalidate tenant records and access semantics.
-    if (payload.role !== undefined && String(payload.role).toLowerCase() !== targetRole) {
-      return json({ error: 'Account role cannot be changed while editing' }, 400);
-    }
-
-    const name = typeof payload.name === 'string' ? payload.name.trim() : target.name;
-    if (!name || name.length > 100) return json({ error: 'A valid name is required' }, 400);
-    const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : target.email;
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'A valid email is required' }, 400);
-    const duplicate = await env.DB.prepare('SELECT id FROM users WHERE email = ? AND id <> ?').bind(email, id).first();
-    if (duplicate) return json({ error: 'Email already exists' }, 409);
-
-    await env.DB.prepare('UPDATE users SET name = ?, email = ? WHERE id = ?').bind(name, email, id).run();
-
-    if (targetRole === 'tenant') {
-      const tenant = await env.DB.prepare('SELECT * FROM tenants WHERE user_id = ?').bind(id).first();
-      if (!tenant) return json({ error: 'Tenant profile is missing for this account' }, 409);
-      const numberField = (key, fallback) => {
-        if (payload[key] === undefined || payload[key] === null || payload[key] === '') return fallback;
-        const value = Number(payload[key]);
-        return Number.isFinite(value) && value >= 0 ? value : NaN;
-      };
-      const balance = numberField('balance', tenant.balance ?? 0);
-      const deposit = numberField('deposit', tenant.deposit ?? 0);
-      const rent = numberField('rent_amount', tenant.rent_amount ?? 0);
-      if (![balance, deposit, rent].every(Number.isFinite)) return json({ error: 'Tenant amounts must be valid non-negative numbers' }, 400);
-      const billingCycle = payload.billing_cycle === undefined ? tenant.billing_cycle : String(payload.billing_cycle).trim().toLowerCase();
-      if (!['monthly', 'weekly', 'biweekly'].includes(billingCycle)) return json({ error: 'Invalid billing cycle' }, 400);
-      const leasedUnit = payload.leased_unit === undefined ? tenant.leased_unit : String(payload.leased_unit).trim();
-      const onboardDate = payload.onboard_date === undefined ? tenant.onboard_date : String(payload.onboard_date);
-      if (onboardDate && Number.isNaN(new Date(onboardDate).getTime())) return json({ error: 'Invalid move-in date' }, 400);
-      await env.DB.prepare(`
-        UPDATE tenants SET balance = ?, deposit = ?, rent_amount = ?,
-          billing_cycle = ?, leased_unit = ?, onboard_date = ?
-        WHERE user_id = ?
-      `).bind(balance, deposit, rent, billingCycle, leasedUnit, onboardDate, id).run();
-    }
-
-    // Update house assignment only when the client explicitly sends house_ids/house_id.
-    // Device-level permissions are intentionally untouched.
-    const assignmentProvided = Array.isArray(payload.house_ids) || Object.prototype.hasOwnProperty.call(payload, 'house_id');
-    if (assignmentProvided && targetRole !== 'owner') {
-      let requested = Array.isArray(payload.house_ids) ? payload.house_ids : (payload.house_id ? [payload.house_id] : []);
-      requested = [...new Set(requested.map(Number))];
-      if (targetRole === 'tenant' && requested.length > 1) return json({ error: 'A tenant can be assigned to one property at a time' }, 400);
-      if (requested.some(value => !Number.isSafeInteger(value) || value <= 0)) return json({ error: 'Invalid property assignment' }, 400);
-      if (targetRole === 'tenant' && requested.length !== 1) return json({ error: 'A tenant must have one assigned property' }, 400);
-
-      for (const houseId of requested) {
-        const house = actorRole === 'owner'
-          ? await env.DB.prepare('SELECT id FROM houses WHERE id = ? AND owner_id = ?').bind(houseId, authUser.id).first()
-          : await env.DB.prepare('SELECT id FROM houses WHERE id = ?').bind(houseId).first();
-        if (!house) return json({ error: actorRole === 'owner' ? 'You can only assign accounts to properties you own' : 'Property not found' }, actorRole === 'owner' ? 403 : 404);
-      }
-
-      if (actorRole === 'admin') {
-        await env.DB.prepare('DELETE FROM user_house_access WHERE user_id = ?').bind(id).run();
-      } else {
-        await env.DB.prepare(`
-          DELETE FROM user_house_access
-          WHERE user_id = ? AND house_id IN (SELECT id FROM houses WHERE owner_id = ?)
-        `).bind(id, authUser.id).run();
-      }
-      for (const houseId of requested) {
-        await env.DB.prepare(`
-          INSERT OR IGNORE INTO user_house_access (user_id, house_id, access_level, created_at)
-          VALUES (?, ?, ?, ?)
-        `).bind(id, houseId, targetRole === 'tenant' ? 'tenant' : 'viewer', new Date().toISOString()).run();
-      }
-    }
-
-    return json({ success: true, message: 'Account updated successfully' });
-  } catch (error) {
-    console.error('Update managed account error:', error);
-    return json({ error: 'Failed to update account' }, 500);
-  }
-}
-
-
-export async function resetManagedAccountPassword(request, env, authUser, targetUserId) {
-  const actorRole = String(authUser?.role || '').toLowerCase();
-
-  if (!['admin', 'owner'].includes(actorRole)) {
-    return json({ error: 'Forbidden' }, 403);
-  }
-
-  const id = Number(targetUserId);
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    return json({ error: 'Invalid account ID' }, 400);
-  }
-
-  try {
-    const target = await env.DB.prepare(`
-      SELECT id, name, email, role
-      FROM users
-      WHERE id = ?
-    `).bind(id).first();
-
-    if (!target) {
-      return json({ error: 'Account not found' }, 404);
-    }
-
-    const targetRole = String(target.role || '').toLowerCase();
-
-    // Only managed account types can be reset here.
-    if (!['owner', 'tenant', 'user'].includes(targetRole)) {
-      return json({ error: 'This account cannot be reset here' }, 403);
-    }
-
-    // Owners may reset only tenant/user accounts assigned to their properties.
-    if (actorRole === 'owner') {
-      if (targetRole === 'owner') {
-        return json({ error: 'Owners cannot reset other owner accounts' }, 403);
-      }
-
-      const managed = await env.DB.prepare(`
-        SELECT 1
-        FROM user_house_access uha
-        JOIN houses h ON h.id = uha.house_id
-        WHERE uha.user_id = ?
-          AND h.owner_id = ?
-
-        UNION
-
-        SELECT 1
-        FROM user_device_access uda
-        JOIN devices d ON d.id = uda.device_id
-        JOIN houses h ON h.id = d.house_id
-        WHERE uda.user_id = ?
-          AND h.owner_id = ?
-
-        LIMIT 1
-      `).bind(id, authUser.id, id, authUser.id).first();
-
-      if (!managed) {
-        return json({
-          error: 'You can only reset accounts assigned to your properties'
-        }, 403);
-      }
-    }
-
-    const tempPassword = generateTempPassword();
-    const { hash, salt } = await hashPBKDF2(tempPassword);
-
-    const now = new Date().toISOString();
-    const expiration = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-    // Update the password and invalidate existing refresh sessions.
-    const results = await env.DB.batch([
-  env.DB.prepare(`
-    UPDATE users
-    SET password_hash = ?,
-        password_salt = ?,
-        requires_change_password = 1,
-        temp_password_expiration = ?
-    WHERE id = ?
-  `).bind(
-    arrayBufferToHex(hash),
-    arrayBufferToHex(salt),
-    expiration,
-    id
-  ),
-
-  env.DB.prepare(`
-    DELETE FROM refresh_tokens
-    WHERE user_id = ?
-  `).bind(id)
-]);
-
-if (!results[0] || results[0].meta?.changes !== 1) {
-  throw new Error('Password reset did not update the account');
-}
-
-    let emailSent = false;
-
-    try {
-      await sendTemporaryPasswordEmail({
-        env,
-        name: target.name || target.email,
-        email: target.email,
-        role: targetRole,
-        tempPassword
-      });
-
-      emailSent = true;
-    } catch (emailError) {
-      console.error('Password reset email failed:', emailError);
-    }
-
-    return json({
-      success: true,
-      message: emailSent
-        ? 'Password reset successfully. Temporary password emailed.'
-        : 'Password reset successfully, but email delivery failed. Use the temporary password below.',
-      emailSent,
-      tempPassword,
-      expiresAt: expiration,
-      user: {
-        id: target.id,
-        name: target.name,
-        email: target.email,
-        role: targetRole
-      }
-    });
-
-  } catch (error) {
-    console.error('Managed account password reset error:', error);
-    return json({ error: 'Failed to reset account password' }, 500);
-  }
-}
-
 
 
 export async function login(request, env) {
@@ -756,6 +229,12 @@ export async function login(request, env) {
 
     if (!user) {
       await fakeVerify();
+      await writeAuditLog(env, {
+        action: 'auth.login',
+        outcome: 'failed',
+        source: 'web',
+        details: { email: normalizedEmail, reason: 'invalid_credentials' }
+      });
       return json({ error: 'Invalid email or password' }, 401);
     }
 
@@ -763,7 +242,28 @@ export async function login(request, env) {
       ? await verifyPBKDF2(user.password_hash, user.password_salt, parsed.data.password)
       : await verifyLegacy(parsed.data.password, user.password_salt, user.password_hash);
 
-    if (!valid) return json({ error: 'Invalid email or password' }, 401);
+    if (!valid) {
+      await writeAuditLog(env, {
+        userId: user.id,
+        action: 'auth.login',
+        outcome: 'failed',
+        source: 'web',
+        details: { email: normalizedEmail, reason: 'invalid_credentials' }
+      });
+      return json({ error: 'Invalid email or password' }, 401);
+    }
+
+    const accountState = await getUserAccountState(env, user.id);
+    if (!accountState.active) {
+      await writeAuditLog(env, {
+        userId: user.id,
+        action: 'auth.login',
+        outcome: 'denied',
+        source: 'web',
+        details: { reason: 'account_suspended' }
+      });
+      return json({ error: 'This account has been suspended', code: 'ACCOUNT_SUSPENDED' }, 403);
+    }
 
     if (Number(user.requires_change_password) === 1) {
   const expiration = user.temp_password_expiration
@@ -771,6 +271,13 @@ export async function login(request, env) {
     : NaN;
 
   if (!Number.isFinite(expiration) || expiration <= Date.now()) {
+    await writeAuditLog(env, {
+      userId: user.id,
+      action: 'auth.login',
+      outcome: 'denied',
+      source: 'web',
+      details: { reason: 'temporary_password_expired' }
+    });
     return json({
       error: 'Your temporary password has expired. Please contact your administrator or property owner to reset it.',
       code: 'TEMP_PASSWORD_EXPIRED'
@@ -782,10 +289,17 @@ export async function login(request, env) {
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('15m')
-      .sign(getSecret(env));
+      .sign(await getSecretBytes(env, 'JWT_SCRT'));
 
     const refreshTokenRaw = crypto.randomUUID();
     await env.DB.prepare('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)').bind(user.id, refreshTokenRaw, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()).run();
+
+    await writeAuditLog(env, {
+      userId: user.id,
+      action: 'auth.login',
+      outcome: 'success',
+      source: 'web'
+    });
 
    return json({
   success: true,
@@ -796,7 +310,8 @@ export async function login(request, env) {
     id: user.id,
     name: user.name,
     email: user.email,
-    role: user.role
+    role: user.role,
+    status: accountState.status
   }
 });
   } catch (error) {
@@ -818,13 +333,18 @@ export async function updatePassword(request, env) {
   try {
     let payload;
     try {
-      ({ payload } = await jwtVerify(token, getSecret(env)));
+      ({ payload } = await jwtVerify(token, await getSecretBytes(env, 'JWT_SCRT')));
     } catch {
       return json({ error: 'Invalid or expired token' }, 401);
     }
 
     const user = await env.DB.prepare('SELECT id, password_hash, password_salt FROM users WHERE id = ?').bind(payload.sub).first();
     if (!user) return json({ error: 'User not found' }, 404);
+
+    const accountState = await getUserAccountState(env, user.id);
+    if (!accountState.active) {
+      return json({ error: 'This account has been suspended', code: 'ACCOUNT_SUSPENDED' }, 403);
+    }
 
     const valid = await verifyPBKDF2(user.password_hash, user.password_salt, oldPassword);
     if (!valid) return json({ error: 'Old password is incorrect' }, 401);
@@ -848,6 +368,120 @@ export async function updatePassword(request, env) {
   }
 }
 
+async function hashPasswordResetCode(env, userId, code) {
+  const secret = await getSecretString(env, 'JWT_SCRT');
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(`${userId}:${code}`)
+  );
+  return arrayBufferToHex(signature);
+}
+
+export async function requestPasswordResetCode(request, env) {
+  const parsed = await parseJsonBody(request);
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const emailResult = validateEmail(parsed.data?.email);
+  if (!emailResult.ok) return json({ error: 'Invalid email' }, 400);
+
+  const genericResponse = () => json({
+    success: true,
+    message: 'If the account exists, a verification code has been sent.'
+  });
+
+  try {
+    const email = String(parsed.data.email).trim().toLowerCase();
+    const user = await env.DB.prepare('SELECT id, name FROM users WHERE email = ?').bind(email).first();
+    if (!user) return genericResponse();
+    const accountState = await getUserAccountState(env, user.id);
+    if (!accountState.active) return genericResponse();
+
+    const random = new Uint32Array(1);
+    crypto.getRandomValues(random);
+    const code = String(random[0] % 1_000_000).padStart(6, '0');
+    const tokenHash = await hashPasswordResetCode(env, user.id, code);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000).toISOString();
+
+    await env.DB.prepare('DELETE FROM password_resets WHERE user_id = ? AND used = 0')
+      .bind(user.id).run();
+    await env.DB.prepare(
+      'INSERT INTO password_resets (user_id, token, expires_at, used) VALUES (?, ?, ?, 0)'
+    ).bind(user.id, tokenHash, expiresAt).run();
+
+    try {
+      await sendPasswordResetCodeEmail({
+        env, name: user.name || email, email, code
+      });
+    } catch (emailError) {
+      console.error('[Auth] Password reset email delivery failed:', emailError);
+    }
+    return genericResponse();
+  } catch (error) {
+    console.error('[Auth] Password reset code request failed:', error);
+    // Keep account-existence responses indistinguishable.
+    return genericResponse();
+  }
+}
+
+export async function confirmPasswordResetCode(request, env) {
+  const parsed = await parseJsonBody(request);
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const emailResult = validateEmail(parsed.data?.email);
+  if (!emailResult.ok) return json({ error: 'Invalid email or verification code' }, 400);
+
+  const { code, newPassword } = parsed.data;
+  if (typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+    return json({ error: 'Invalid or expired verification code' }, 400);
+  }
+  if (typeof newPassword !== 'string' || !validatePassword(newPassword).ok) {
+    return json({ error: 'Password is too weak' }, 400);
+  }
+
+  try {
+    const email = String(parsed.data.email).trim().toLowerCase();
+    const user = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+    if (!user) return json({ error: 'Invalid or expired verification code' }, 400);
+    const accountState = await getUserAccountState(env, user.id);
+    if (!accountState.active) return json({ error: 'This account has been suspended', code: 'ACCOUNT_SUSPENDED' }, 403);
+
+    const tokenHash = await hashPasswordResetCode(env, user.id, code);
+    const reset = await env.DB.prepare(`
+      SELECT id FROM password_resets
+      WHERE user_id = ? AND token = ? AND used = 0 AND expires_at > ?
+      ORDER BY id DESC LIMIT 1
+    `).bind(user.id, tokenHash, new Date().toISOString()).first();
+    if (!reset) return json({ error: 'Invalid or expired verification code' }, 400);
+
+    const consumed = await env.DB.prepare(`
+      UPDATE password_resets SET used = 1
+      WHERE id = ? AND used = 0 AND expires_at > ?
+    `).bind(reset.id, new Date().toISOString()).run();
+    if (consumed.meta?.changes !== 1) {
+      return json({ error: 'This verification code has already been used or expired' }, 400);
+    }
+
+    const { hash: derivedBits, salt } = await hashPBKDF2(newPassword);
+    await env.DB.prepare(`
+      UPDATE users SET password_hash = ?, password_salt = ?,
+        requires_change_password = 0, temp_password_expiration = NULL
+      WHERE id = ?
+    `).bind(arrayBufferToHex(derivedBits), arrayBufferToHex(salt), user.id).run();
+    await env.DB.prepare('DELETE FROM refresh_tokens WHERE user_id = ?').bind(user.id).run();
+    return json({ success: true, message: 'Password reset successfully. Please sign in.' });
+  } catch (error) {
+    console.error('[Auth] Password reset confirmation failed:', error);
+    return json({ error: 'Unable to reset password. Please request a new verification code.' }, 500);
+  }
+}
+
 export async function requestReset(request, env) {
   const parsed = await parseJsonBody(request);
   if (!parsed.ok) return json({ error: parsed.error }, 400);
@@ -860,7 +494,12 @@ export async function requestReset(request, env) {
     const user = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(normalizedEmail).first();
     if (!user) return json({ success: true, message: 'If your email exists, a reset link has been sent' });
 
-    const token = await new SignJWT({ sub: user.id }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h').sign(getSecret(env));
+    const accountState = await getUserAccountState(env, user.id);
+    if (!accountState.active) {
+      return json({ success: true, message: 'If your email exists, a reset link has been sent' });
+    }
+
+    const token = await new SignJWT({ sub: user.id }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h').sign(await getSecretBytes(env, 'JWT_SCRT'));
     const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();
     await env.DB.prepare('INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)').bind(user.id, token, expiresAt).run();
 
@@ -884,33 +523,39 @@ export async function resetPassword(request, env) {
   try {
     let payload;
     try {
-      ({ payload } = await jwtVerify(token, getSecret(env)));
+      ({ payload } = await jwtVerify(token, await getSecretBytes(env, 'JWT_SCRT')));
     } catch {
       return json({ error: 'Invalid or expired token' }, 400);
     }
 
-    const reset = await env.DB.prepare('SELECT id, used, expires_at FROM password_resets WHERE token = ?').bind(token).first();
-    if (!reset || reset.used || new Date(reset.expires_at) < new Date()) return json({ error: 'Invalid or expired token' }, 400);
+    const reset = await env.DB.prepare('SELECT id, user_id, used, expires_at FROM password_resets WHERE token = ?').bind(token).first();
+    if (!reset || reset.used || Number(reset.user_id) !== Number(payload.sub) || new Date(reset.expires_at) <= new Date()) {
+      return json({ error: 'Invalid or expired token' }, 400);
+    }
+
+    const accountState = await getUserAccountState(env, reset.user_id ?? payload.sub);
+    if (!accountState.active) {
+      return json({ error: 'This account has been suspended', code: 'ACCOUNT_SUSPENDED' }, 403);
+    }
 
     const { hash: derivedBits, salt } = await hashPBKDF2(newPassword);
-    await env.DB.prepare(`
-  UPDATE users
-  SET password_hash = ?,
-      password_salt = ?,
-      requires_change_password = 0,
-      temp_password_expiration = NULL
-  WHERE id = ?
-`).bind(
-  arrayBufferToHex(derivedBits),
-  arrayBufferToHex(salt),
-  payload.sub
-).run();
+    const consumed = await env.DB.prepare(`
+      UPDATE password_resets SET used = 1
+      WHERE id = ? AND used = 0 AND expires_at > ?
+    `).bind(reset.id, new Date().toISOString()).run();
+    if (consumed.meta?.changes !== 1) {
+      return json({ error: 'Invalid or expired token' }, 400);
+    }
 
-await env.DB.prepare(`
-  DELETE FROM refresh_tokens
-  WHERE user_id = ?
-`).bind(payload.sub).run();
-await env.DB.prepare('UPDATE password_resets SET used = 1 WHERE id = ?').bind(reset.id).run();
+    await env.DB.prepare(`
+      UPDATE users
+      SET password_hash = ?, password_salt = ?,
+          requires_change_password = 0, temp_password_expiration = NULL
+      WHERE id = ?
+    `).bind(arrayBufferToHex(derivedBits), arrayBufferToHex(salt), reset.user_id ?? payload.sub).run();
+
+    await env.DB.prepare('DELETE FROM refresh_tokens WHERE user_id = ?')
+      .bind(reset.user_id ?? payload.sub).run();
 
     return json({ success: true, message: 'Password has been reset successfully' });
   } catch (error) {
@@ -960,40 +605,44 @@ export async function verifyJwt(request, env) {
 
   let payload;
   try {
-    ({ payload } = await jwtVerify(auth.slice(7), getSecret(env)));
+    ({ payload } = await jwtVerify(auth.slice(7), await getSecretBytes(env, 'JWT_SCRT')));
   } catch {
     return json({ error: 'Invalid or expired token' }, 401);
   }
 
   try {
-    const user = await env.DB.prepare('SELECT id, email, role, name, requires_change_password, temp_password_expiration FROM users WHERE id = ?').bind(payload.sub).first();
+    const user = await env.DB.prepare('SELECT id, email, role, name FROM users WHERE id = ?').bind(payload.sub).first();
     if (!user) return json({ error: 'User not found' }, 401);
 
-    if (Number(user.requires_change_password) === 1) {
-  const expiration = user.temp_password_expiration
-    ? Date.parse(user.temp_password_expiration)
+    const passwordState = await env.DB.prepare('SELECT requires_change_password, temp_password_expiration FROM users WHERE id = ?').bind(payload.sub).first();
+    const userWithPasswordState = { ...user, ...(passwordState || {}) };
+
+    const accountState = await getUserAccountState(env, user.id);
+    if (!accountState.active) {
+      return json({ error: 'This account has been suspended', code: 'ACCOUNT_SUSPENDED' }, 403);
+    }
+
+    if (Number(userWithPasswordState.requires_change_password) === 1) {
+  const expiration = userWithPasswordState.temp_password_expiration
+    ? Date.parse(userWithPasswordState.temp_password_expiration)
     : NaN;
 
-  if (!Number.isFinite(expiration) || expiration <= Date.now()) {
+  if (Number.isFinite(expiration) && expiration <= Date.now()) {
     return json({
       error: 'Your temporary password has expired. Contact your administrator or property owner.',
       code: 'TEMP_PASSWORD_EXPIRED'
     }, 403);
   }
-
-  return json({
-    error: 'You must change your temporary password before accessing this resource.',
-    code: 'PASSWORD_CHANGE_REQUIRED'
-  }, 403);
 }
 
-    const assignedHouses = await getAssignedHouses(env, user);
+    const assignedHouses = await getAssignedHouses(env, userWithPasswordState);
     const assignedHouse = assignedHouses[0] || null;
 
     return json({
       valid: true,
       user: {
-        ...user,
+        ...userWithPasswordState,
+        status: accountState.status,
         assigned_houses: assignedHouses,
         assigned_house: assignedHouse
       }
@@ -1032,6 +681,11 @@ if (!user) {
   return json({ error: 'User not found' }, 401);
 }
 
+const accountState = await getUserAccountState(env, user.id);
+if (!accountState.active) {
+  return json({ error: 'This account has been suspended', code: 'ACCOUNT_SUSPENDED' }, 403);
+}
+
 if (Number(user.requires_change_password) === 1) {
   const expiration = user.temp_password_expiration
     ? Date.parse(user.temp_password_expiration)
@@ -1045,7 +699,7 @@ if (Number(user.requires_change_password) === 1) {
   }
 }
 
-    const newAccessToken = await new SignJWT({ sub: row.user_id }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('15m').sign(getSecret(env));
+    const newAccessToken = await new SignJWT({ sub: row.user_id }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('15m').sign(await getSecretBytes(env, 'JWT_SCRT'));
     return json({ success: true, accessToken: newAccessToken });
   } catch (error) {
     console.error('Refresh token error:', error);
@@ -1068,30 +722,32 @@ export async function getAuthUser(request, env) {
     let payload;
 
     try {
-      ({ payload } = await jwtVerify(auth.slice(7), getSecret(env)));
+      ({ payload } = await jwtVerify(auth.slice(7), await getSecretBytes(env, 'JWT_SCRT')));
     } catch {
       return { error: 'Invalid or expired token', status: 401 };
     }
 
-    const user = await env.DB.prepare(`
-      SELECT
-        id,
-        email,
-        role,
-        name,
-        requires_change_password,
-        temp_password_expiration
-      FROM users
-      WHERE id = ?
-    `).bind(payload.sub).first();
+    const user = await env.DB.prepare('SELECT id, email, role, name FROM users WHERE id = ?').bind(payload.sub).first();
 
     if (!user) {
       return { error: 'User not found', status: 404 };
     }
 
-    if (Number(user.requires_change_password) === 1) {
-      const expiration = user.temp_password_expiration
-        ? Date.parse(user.temp_password_expiration)
+    const passwordState = await env.DB.prepare('SELECT requires_change_password, temp_password_expiration FROM users WHERE id = ?').bind(payload.sub).first();
+    const userWithPasswordState = { ...user, ...(passwordState || {}) };
+
+    const accountState = await getUserAccountState(env, user.id);
+    if (!accountState.active) {
+      return {
+        error: 'This account has been suspended',
+        status: 403,
+        code: 'ACCOUNT_SUSPENDED'
+      };
+    }
+
+    if (Number(userWithPasswordState.requires_change_password) === 1) {
+      const expiration = userWithPasswordState.temp_password_expiration
+        ? Date.parse(userWithPasswordState.temp_password_expiration)
         : NaN;
 
       if (!Number.isFinite(expiration) || expiration <= Date.now()) {
@@ -1109,16 +765,17 @@ export async function getAuthUser(request, env) {
       };
     }
 
-    return { user };
+    return {
+      user: {
+        ...userWithPasswordState,
+        status: accountState.status
+      }
+    };
 
   } catch (error) {
     console.error('Auth user error:', error);
     return { error: 'Authentication failed', status: 500 };
   }
-}
-
-function getSecret(env) {
-  return new TextEncoder().encode(env.JWT_SCRT);
 }
 
 function json(data, status = 200) {
@@ -1127,3 +784,13 @@ function json(data, status = 200) {
     headers: { 'Content-Type': 'application/json' }
   });
 }
+
+export {
+  registerProvisionedAccount,
+  listManagedAccounts,
+  suspendAccount,
+  reactivateAccount,
+  deleteManagedAccount,
+  updateManagedAccount,
+  resetManagedAccountPassword
+} from './modules/accounts.js';

@@ -37,7 +37,8 @@ test('fingerprint enrollment reserves an available template slot for the signed-
   const insert = DB.statements.find(statement => statement.sql.includes('INSERT INTO device_fingerprint_enrollments'));
   assert.deepEqual(insert.values.slice(0, 3), [8, 19, 3]);
   assert.equal(typeof insert.values[3], 'string');
-  assert.equal(insert.values[4], insert.values[3]);
+  assert.ok(Date.parse(insert.values[3]) > Date.now());
+  assert.equal(insert.values[5], insert.values[4]);
 });
 
 test('fingerprint enrollment is rejected when the user has no access to the device', async () => {
@@ -91,8 +92,11 @@ test('device owner can disable a fingerprint after confirming the device operati
     '3'
   );
   const body = await response.json();
+  const disableStatement = statements.find(statement =>
+    statement.sql.includes("SET status = 'disabled'")
+  );
 
   assert.equal(response.status, 200);
   assert.equal(body.action, 'disable');
-  assert.match(statements.at(-1).sql, /SET status = 'disabled'/);
+  assert.ok(disableStatement);
 });

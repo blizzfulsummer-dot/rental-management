@@ -109,14 +109,14 @@ test('password update clears the forced-change flag and temporary expiration', a
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('15m')
-    .sign(new TextEncoder().encode('test-secret'));
+    .sign(new TextEncoder().encode('test-secret-for-unit-tests-only-32-chars'));
   const request = new Request('https://example.com/api/update_password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, oldPassword: 'OldPass123!', newPassword: 'NewPass456!' })
   });
 
-  const response = await updatePassword(request, { DB: db, JWT_SCRT: 'test-secret' });
+  const response = await updatePassword(request, { DB: db, JWT_SCRT: 'test-secret-for-unit-tests-only-32-chars' });
   const payload = await response.json();
   const update = statements.find(statement => statement.sql.includes('UPDATE users'));
 
@@ -201,6 +201,41 @@ test('house device list normalizes production name and type columns for the requ
   assert.equal(payload.devices[0].house_id, 10);
   assert.equal(payload.devices[0].device_name, 'Main Gate');
   assert.equal(payload.devices[0].device_type, 'Timer');
+});
+
+test('house device list normalizes legacy device_name and device_type columns', async () => {
+  const db = {
+    prepare(sql) {
+      return {
+        bind() {
+          if (sql.includes('FROM user_house_access')) {
+            return { async first() { return { 1: 1 }; } };
+          }
+
+          if (sql.includes('FROM devices d')) {
+            return {
+              async all() {
+                return {
+                  results: [
+                    { id: 12, house_id: 10, device_name: 'Legacy Lock', device_type: 'lock', status: 'Offline' }
+                  ]
+                };
+              }
+            };
+          }
+
+          return { async first() { return null; }, async all() { return { results: [] }; } };
+        }
+      };
+    }
+  };
+
+  const response = await listHouseDevices({}, { DB: db }, { id: 42, role: 'tenant' }, '10');
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.devices[0].device_name, 'Legacy Lock');
+  assert.equal(payload.devices[0].device_type, 'lock');
 });
 
 test('admin can create a device using production name and type columns', async () => {
@@ -402,13 +437,13 @@ test('profile endpoint includes assigned houses using production address column'
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('15m')
-    .sign(new TextEncoder().encode('test-secret'));
+    .sign(new TextEncoder().encode('test-secret-for-unit-tests-only-32-chars'));
 
   const request = new Request('https://example.com/api/me', {
     headers: { Authorization: `Bearer ${token}` }
   });
 
-  const response = await verifyJwt(request, { DB: db, JWT_SCRT: 'test-secret' });
+  const response = await verifyJwt(request, { DB: db, JWT_SCRT: 'test-secret-for-unit-tests-only-32-chars' });
   const result = await response.json();
 
   assert.equal(response.status, 200);

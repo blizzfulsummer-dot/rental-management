@@ -1,5 +1,7 @@
 # Architecture Overview
 
+> **Current structure:** This page contains the original architecture description. For the maintained module map and current contribution guidance, see [Project Architecture](./ARCHITECTURE.md).
+
 ## System Architecture
 
 The Rental Management API is built on **Cloudflare Workers** with **D1 SQLite database** for serverless, edge-computed functionality.

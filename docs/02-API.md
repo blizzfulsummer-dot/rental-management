@@ -517,3 +517,28 @@ When rate limit is exceeded, you'll receive:
 }
 ```
 Status: 429 Too Many Requests
+
+
+## Email OTP password reset (current frontend flow)
+
+### POST /api/password-reset/request
+
+Request a one-time password-reset code. The response is intentionally generic whether or not the email address exists. A code is emailed only when the account is eligible and email delivery is configured.
+
+```json
+{ "email": "user@example.com" }
+```
+
+### POST /api/password-reset/confirm
+
+Confirm the emailed six-digit code and set a new password. Codes expire after ten minutes and are single-use.
+
+```json
+{
+  "email": "user@example.com",
+  "code": "123456",
+  "newPassword": "NewPass456!"
+}
+```
+
+The successful reset invalidates the user's refresh tokens.

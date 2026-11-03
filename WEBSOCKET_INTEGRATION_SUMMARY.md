@@ -1,3 +1,5 @@
+> **Updated authentication note:** The current ESP32/simulator flow uses `POST /ws/device-ticket` with the device's 64-character pairing key. Browser clients use `/ws/ticket` with a user JWT. Older examples in this historical summary that log in as the demo administrator to simulate a device are obsolete.
+
 # WebSocket Smart Home Integration - Summary
 
 Complete implementation of a secure, real-time Durable Object WebSocket system for your rental management smart-home project.
@@ -169,7 +171,7 @@ npm run dev
 ```bash
 curl -X POST http://localhost:8787/api/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com", "password": "AdminPass123!"}'
+  -d '{"email": "admin.demo@example.test", "password": "DemoPass123!"}'
 ```
 
 ### 3. Issue WebSocket Ticket

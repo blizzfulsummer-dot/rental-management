@@ -20,7 +20,9 @@ export async function verifyLegacy(password, salt, hash) {
 }
 
 export async function fakeVerify() {
-  await crypto.subtle.digest('SHA-256', new TextEncoder().encode('fake'));
+  // Match the PBKDF2 work factor used for a real password check to reduce
+  // account-enumeration timing differences for unknown email addresses.
+  await hashPBKDF2('constant-dummy-password-for-timing-equalization');
 }
 
 export function arrayBufferToHex(buffer) {

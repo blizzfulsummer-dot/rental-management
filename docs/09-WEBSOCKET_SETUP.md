@@ -2,6 +2,8 @@
 
 Step-by-step guide to integrate the WebSocket room system into your rental management project.
 
+> **Current device authentication (supersedes older examples below):** ESP32 and simulator connections use `POST /ws/device-ticket` with `Authorization: Bearer <64-character-device-pairing-key>` and `{ "deviceId": 1 }`. The response includes a single-use ticket and the device's actual `houseId`; connect to `/ws/house/:houseId?ticket=...`. Browser sessions continue to use `POST /ws/ticket` with a user JWT. Do not use an administrator login/JWT as a device credential.
+
 > **For this repository:** the role-aware device inventory, pairing-key flow,
 > ticket endpoint, and ESP32 protocol are already implemented. Do not use the
 > placeholder schema/customization steps below for the deployed app. See
@@ -187,7 +189,7 @@ npm run dev
 # 1. Login to get JWT
 curl -X POST http://localhost:8787/api/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com", "password": "AdminPass123!"}'
+  -d '{"email": "admin.demo@example.test", "password": "DemoPass123!"}'
 
 # Store JWT_TOKEN from response
 

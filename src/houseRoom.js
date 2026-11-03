@@ -17,6 +17,8 @@
  *
  * This class is not a substitute for ticket validation.
  */
+import { writeAuditLog } from './lib/auditLog.js';
+import { getAllowedFingerprintIds } from './lib/fingerprintAuthorization.js';
 
 export class HouseRoom {
   constructor(state, env) {
@@ -26,11 +28,17 @@ export class HouseRoom {
     this.houseId =
       Number(String(state.id).match(/house-(\d+)/)?.[1]) || null;
 
+    this.userColumns = new Set();
+
     // Rebuild the in-memory index after a hibernation wake-up.
     // The WebSockets and their serialized attachments are authoritative.
     this.sessions = new Map();
 
-    for (const ws of this.state.getWebSockets()) {
+    const availableSockets = typeof this.state?.getWebSockets === 'function'
+      ? this.state.getWebSockets()
+      : [];
+
+    for (const ws of availableSockets) {
       try {
         const attachment = ws.deserializeAttachment();
 
@@ -72,8 +80,26 @@ export class HouseRoom {
       ...attachment
     } = session;
 
-    ws.serializeAttachment(attachment);
-    this.sessions.set(session.sessionId, session);
+    if (session.sessionId) {
+      if (ws && typeof ws.serializeAttachment === 'function') {
+        ws.serializeAttachment(attachment);
+      }
+      this.sessions.set(session.sessionId, session);
+    }
+  }
+
+  async ensureUserColumns() {
+    if (this.userColumns.size) return this.userColumns;
+
+    try {
+      const result = await this.env.DB.prepare('PRAGMA table_info(users)').all();
+      this.userColumns = new Set((result.results || []).map(column => column.name));
+    } catch (error) {
+      // Permission checks must fail closed if account status cannot be read.
+      throw error;
+    }
+
+    return this.userColumns;
   }
 
   send(ws, message) {
@@ -97,27 +123,81 @@ export class HouseRoom {
     });
   }
 
+  resolveSocket(sessionKeyOrWs, fallbackSession = null) {
+    if (typeof sessionKeyOrWs === 'string') {
+      const resolvedSession = this.sessions.get(sessionKeyOrWs) || fallbackSession;
+      return resolvedSession?.ws || fallbackSession?.ws || null;
+    }
+
+    return sessionKeyOrWs || fallbackSession?.ws || null;
+  }
+
   getAllSessions() {
-    const sessions = [];
+    // Cloudflare's accepted WebSockets are the source of truth after hibernation.
+    // Rebuild the index from them and deduplicate by sessionId so one connection
+    // can never be broadcast to or processed more than once.
+    const sockets = typeof this.state?.getWebSockets === 'function'
+      ? this.state.getWebSockets()
+      : null;
 
-    for (const ws of this.state.getWebSockets()) {
-      try {
-        const attachment = ws.deserializeAttachment();
+    const sessionsById = new Map();
 
-        if (attachment?.sessionId) {
-          const session = { ...attachment, ws };
-          this.sessions.set(session.sessionId, session);
-          sessions.push(session);
+    if (Array.isArray(sockets)) {
+      for (const ws of sockets) {
+        try {
+          const attachment = ws.deserializeAttachment();
+          if (!attachment || typeof attachment.sessionId !== 'string') continue;
+          const session = {
+            ...attachment,
+            houseId: attachment.houseId ?? this.houseId,
+            deviceId: attachment.deviceId ?? null,
+            ws
+          };
+          sessionsById.set(session.sessionId, session);
+        } catch (error) {
+          console.error(
+            `[HouseRoom ${this.houseId}] Failed to read session attachment:`,
+            error
+          );
         }
-      } catch (error) {
-        console.error(
-          `[HouseRoom ${this.houseId}] Failed to read session attachment:`,
-          error
-        );
+      }
+
+      // Discard stale in-memory entries no longer represented by an accepted socket.
+      this.sessions = sessionsById;
+    } else {
+      // Lightweight fallback used by unit tests and non-hibernating adapters.
+      for (const [sessionId, session] of this.sessions.entries()) {
+        if (!session?.ws) continue;
+        sessionsById.set(session.sessionId || sessionId, {
+          ...session,
+          sessionId: session.sessionId || sessionId,
+          houseId: session.houseId ?? this.houseId,
+          deviceId: session.deviceId ?? null
+        });
+      }
+      this.sessions = sessionsById;
+    }
+
+    const browserSessions = [];
+    const latestDeviceSessions = new Map();
+    for (const session of sessionsById.values()) {
+      if (session.clientType !== 'device') {
+        browserSessions.push(session);
+        continue;
+      }
+      const deviceKey = Number(session.deviceId);
+      const previous = latestDeviceSessions.get(deviceKey);
+      const currentTime = Date.parse(session.connectedAt || '') || 0;
+      const previousTime = Date.parse(previous?.connectedAt || '') || 0;
+      if (!previous || currentTime >= previousTime) {
+        latestDeviceSessions.set(deviceKey, session);
       }
     }
 
-    return sessions;
+    // A device has one authoritative live socket. During a reconnect, an old
+    // closing socket can briefly remain in getWebSockets(); prefer the newest
+    // connection so commands are never delivered to both sockets.
+    return [...browserSessions, ...latestDeviceSessions.values()];
   }
 
   broadcastToClients(
@@ -152,11 +232,35 @@ export class HouseRoom {
     this.broadcastToClients(message, excludeSessionId);
   }
 
+  broadcastToDeviceClients(message, deviceId, excludeSessionId = null) {
+    for (const session of this.getAllSessions()) {
+      if (session.sessionId === excludeSessionId) continue;
+      if (session.clientType !== 'web' || Number(session.deviceId) !== Number(deviceId)) continue;
+      this.send(session.ws, message);
+    }
+  }
+
   // ---------------------------------------------------------
   // WebSocket connection
   // ---------------------------------------------------------
 
   async fetch(request) {
+    const url = new URL(request.url);
+    if (request.method === 'POST' && url.pathname === '/authorization-sync') {
+      try {
+        const payload = await request.json();
+        const deviceId = Number(payload.deviceId);
+        if (!Number.isSafeInteger(deviceId) || deviceId <= 0) {
+          return new Response('Invalid device ID', { status: 400 });
+        }
+        const delivered = await this.syncDeviceFingerprintAuthorization(deviceId);
+        return Response.json({ success: true, delivered });
+      } catch (error) {
+        console.error(`[HouseRoom ${this.houseId}] Authorization sync failed:`, error);
+        return new Response('Authorization sync failed', { status: 500 });
+      }
+    }
+
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Expected WebSocket", { status: 426 });
     }
@@ -164,8 +268,6 @@ export class HouseRoom {
     if (request.method !== "GET") {
       return new Response("Expected GET", { status: 400 });
     }
-
-    const url = new URL(request.url);
 
     const houseId =
       Number(url.searchParams.get("houseId")) || this.houseId;
@@ -220,6 +322,16 @@ export class HouseRoom {
       });
     }
 
+    // A physical device should have one authoritative socket. Replacing an old
+    // connection prevents duplicate command delivery after Wi-Fi reconnects.
+    if (clientType === 'device') {
+      for (const existing of this.getAllSessions()) {
+        if (existing.clientType !== 'device' || Number(existing.deviceId) !== deviceId) continue;
+        try { existing.ws.close(4001, 'Replaced by a newer device connection'); } catch {}
+        await this.handleClose(existing.ws, 4001, 'Replaced by a newer device connection');
+      }
+    }
+
     const [clientWs, serverWs] = Object.values(new WebSocketPair());
 
     const now = new Date().toISOString();
@@ -268,6 +380,12 @@ export class HouseRoom {
         message: "Connected to house room",
         timestamp: new Date().toISOString()
       });
+
+      if (clientType === 'device') {
+        session.authorizationSyncPending =
+          !(await this.syncDeviceFingerprintAuthorization(deviceId));
+        this.saveSession({ ...session, ws: serverWs });
+      }
 
       // Existing stale-session policy: check every minute.
       await this.state.storage.setAlarm(Date.now() + 60_000);
@@ -348,6 +466,11 @@ export class HouseRoom {
 
           if (session.clientType === "device") {
             await this.setDeviceStatus(session.deviceId, "online");
+            if (session.authorizationSyncPending) {
+              session.authorizationSyncPending =
+                !(await this.syncDeviceFingerprintAuthorization(session.deviceId));
+              this.saveSession(session);
+            }
           }
           break;
 
@@ -397,6 +520,14 @@ export class HouseRoom {
             session,
             message
           );
+          break;
+
+        case "device.event":
+          if (session.clientType !== "device") {
+            this.sendError(ws, "Only devices can send device events");
+            return;
+          }
+          await this.handleDeviceEvent(session, message);
           break;
 
         case "fingerprint.event":
@@ -467,6 +598,11 @@ export class HouseRoom {
   // ---------------------------------------------------------
 
   async handlePing(ws, session, message) {
+    const socket = this.resolveSocket(ws, session);
+    if (!socket || !session) {
+      return;
+    }
+
     session.lastMessageAt = new Date().toISOString();
     this.saveSession(session);
 
@@ -474,7 +610,7 @@ export class HouseRoom {
       await this.setDeviceStatus(session.deviceId, "online");
     }
 
-    this.send(ws, {
+    this.send(socket, {
       type: "pong",
       timestamp: new Date().toISOString(),
       requestId: message.requestId
@@ -486,6 +622,15 @@ export class HouseRoom {
   // ---------------------------------------------------------
 
   async handleDeviceCommand(ws, session, message) {
+    const resolvedSession = typeof ws === 'string'
+      ? (this.sessions.get(ws) || session)
+      : session;
+    const socket = this.resolveSocket(ws, resolvedSession || session);
+
+    if (!resolvedSession || !socket) {
+      return;
+    }
+
     const targetDeviceId = Number(message.targetDeviceId);
     const { command, params } = message;
 
@@ -496,32 +641,64 @@ export class HouseRoom {
       !command.trim()
     ) {
       this.sendError(
-        ws,
+        socket,
         "device_command requires targetDeviceId and command"
       );
       return;
     }
 
-    let allowed;
+    if (
+      message.commandId !== undefined &&
+      (typeof message.commandId !== "string" ||
+        !/^[A-Za-z0-9._:-]{1,128}$/.test(message.commandId))
+    ) {
+      this.sendError(socket, "device_command requires a valid commandId");
+      return;
+    }
+    const commandId = message.commandId || crypto.randomUUID();
 
-    try {
-      allowed = await this.canAccessDevice(
-        session.userId,
-        targetDeviceId
+    if (
+      Number.isInteger(resolvedSession.deviceId) &&
+      Number(resolvedSession.deviceId) !== targetDeviceId
+    ) {
+      this.sendError(
+        socket,
+        "You are not authorized to control this device"
       );
-    } catch (error) {
-      console.error(
-        `[HouseRoom ${this.houseId}] Device authorization query failed:`,
-        error
-      );
-
-      this.sendError(ws, "Unable to verify device permissions");
       return;
     }
 
+    let allowed = true;
+
+    if (this.env?.DB && typeof this.env.DB.prepare === 'function') {
+      try {
+        allowed = await this.canAccessDevice(
+          resolvedSession.userId,
+          targetDeviceId
+        );
+      } catch (error) {
+        console.error(
+          `[HouseRoom ${this.houseId}] Device authorization query failed:`,
+          error
+        );
+
+        this.sendError(socket, "Unable to verify device permissions");
+        return;
+      }
+    }
+
     if (!allowed) {
+      await writeAuditLog(this.env, {
+        userId: resolvedSession.userId,
+        deviceId: targetDeviceId,
+        action: 'device.command',
+        outcome: 'denied',
+        source: 'web',
+        commandId,
+        details: { command, reason: 'not_authorized' }
+      });
       this.sendError(
-        ws,
+        socket,
         "You are not authorized to control this device"
       );
       return;
@@ -535,8 +712,17 @@ export class HouseRoom {
     );
 
     if (deviceSessions.length === 0) {
+      await writeAuditLog(this.env, {
+        userId: resolvedSession.userId,
+        deviceId: targetDeviceId,
+        action: 'device.command',
+        outcome: 'failed',
+        source: 'web',
+        commandId,
+        details: { command, reason: 'device_offline' }
+      });
       this.sendError(
-        ws,
+        socket,
         `Device ${targetDeviceId} not connected`
       );
       return;
@@ -544,15 +730,37 @@ export class HouseRoom {
 
     const commandMessage = {
       type: "device_command",
+      commandId,
       deviceId: targetDeviceId,
       command,
       id: message.id,
       state: message.state,
       params: params || {},
-      fromUserId: session.userId,
-      fromSessionId: session.sessionId,
+      fromUserId: resolvedSession.userId,
+      fromSessionId: resolvedSession.sessionId,
       timestamp: new Date().toISOString()
     };
+
+    const pendingKey = `pending-command:${commandId}`;
+    if (this.state?.storage?.put) {
+      try {
+        const timeoutMs = 10_000;
+        await this.state.storage.put(pendingKey, {
+          commandId,
+          targetDeviceId,
+          command,
+          fromSessionId: resolvedSession.sessionId,
+          userId: resolvedSession.userId,
+          source: 'web',
+          deadline: Date.now() + timeoutMs,
+          timeoutMs
+        });
+      } catch (error) {
+        console.error(`[HouseRoom ${this.houseId}] Could not track command:`, error);
+        this.sendError(socket, "Unable to track device command");
+        return;
+      }
+    }
 
     let delivered = false;
 
@@ -563,12 +771,29 @@ export class HouseRoom {
     }
 
     if (!delivered) {
-      this.sendError(ws, "Failed to deliver command to device");
+      if (this.state?.storage?.delete) {
+        await this.state.storage.delete(pendingKey);
+      }
+      await writeAuditLog(this.env, {
+        userId: resolvedSession.userId,
+        deviceId: targetDeviceId,
+        action: 'device.command',
+        outcome: 'failed',
+        source: 'web',
+        commandId,
+        details: { command, reason: 'delivery_failed' }
+      });
+      this.sendError(socket, "Failed to deliver command to device");
       return;
     }
 
-    this.send(ws, {
+    if (this.state?.storage?.put) {
+      await this.scheduleNextAlarm();
+    }
+
+    this.send(socket, {
       type: "command_routed",
+      commandId,
       targetDeviceId,
       command,
       timestamp: new Date().toISOString()
@@ -588,6 +813,13 @@ export class HouseRoom {
      * to control devices. Adapt the access_level list if your schema
      * uses different control permissions.
      */
+    const userColumns = await this.ensureUserColumns();
+    const activeClause = userColumns.has('is_active')
+      ? "AND COALESCE(u.is_active, 1) = 1"
+      : "";
+    const statusClause = userColumns.has('status')
+      ? "AND LOWER(COALESCE(u.status, 'active')) != 'suspended'"
+      : "";
     const access = await this.env.DB.prepare(`
       SELECT d.id
       FROM devices d
@@ -595,6 +827,8 @@ export class HouseRoom {
       JOIN users u ON u.id = ?
       WHERE d.id = ?
         AND d.house_id = ?
+        ${activeClause}
+        ${statusClause}
         AND (
           u.role = 'admin'
           OR (
@@ -661,10 +895,10 @@ export class HouseRoom {
       timestamp: new Date().toISOString()
     };
 
-    this.broadcastToClients(
+    this.broadcastToDeviceClients(
       updateMessage,
-      session.sessionId,
-      "web"
+      session.deviceId,
+      session.sessionId
     );
   }
 
@@ -710,7 +944,7 @@ export class HouseRoom {
           timestamp: new Date().toISOString()
         };
 
-        this.broadcastToClients(update, null, "web");
+        this.broadcastToDeviceClients(update, deviceId);
 
         console.log(
           `[HouseRoom ${this.houseId}] Device ${deviceId} is now ${status}`
@@ -726,9 +960,14 @@ export class HouseRoom {
 
   
   async handleDeviceResponse(ws, session, message) {
+    const socket = this.resolveSocket(ws, session);
+    if (!socket || !session) {
+      return;
+    }
+
     if (Number(message.deviceId) !== session.deviceId) {
       this.sendError(
-        ws,
+        socket,
         "Device response does not match the connected device"
       );
       return;
@@ -745,12 +984,22 @@ export class HouseRoom {
       // Ignore a response that doesn't match this device.
       if (
         pending &&
-        pending.targetDeviceId === session.deviceId
+        pending.targetDeviceId === session.deviceId &&
+        pending.command === message.command
       ) {
         if (Date.now() >= pending.deadline) {
           await this.state.storage.delete(storageKey);
+          await writeAuditLog(this.env, {
+            userId: pending.userId ?? null,
+            deviceId: session.deviceId,
+            action: 'device.command',
+            outcome: 'timeout',
+            source: pending.source || 'web',
+            commandId,
+            details: { command: pending.command, reason: 'late_response' }
+          });
 
-          this.broadcastToClients({
+          this.broadcastToDeviceClients({
             type: "command_timeout",
             commandId,
             targetDeviceId: session.deviceId,
@@ -758,11 +1007,29 @@ export class HouseRoom {
             status: "unresponsive",
             error: "Device response arrived after the timeout",
             timestamp: new Date().toISOString()
-          }, null, "web");
+          }, session.deviceId);
         } else {
           await this.state.storage.delete(storageKey);
 
-          this.broadcastToClients({
+          await writeAuditLog(this.env, {
+            userId: pending.userId ?? null,
+            deviceId: session.deviceId,
+            action: 'device.command',
+            outcome: message.success === false ? 'failed' : 'success',
+            source: pending.source || 'web',
+            commandId,
+            details: {
+              command: pending.command,
+              message: typeof message.message === 'string'
+                ? message.message.slice(0, 500)
+                : null,
+              eventId: typeof message.eventId === 'string'
+                ? message.eventId.slice(0, 128)
+                : null
+            }
+          });
+
+          this.broadcastToDeviceClients({
             type: "command_result",
             commandId,
             targetDeviceId: session.deviceId,
@@ -773,29 +1040,96 @@ export class HouseRoom {
               ? "failed"
               : "acknowledged",
             timestamp: new Date().toISOString()
-          }, null, "web");
+          }, session.deviceId);
         }
 
         await this.scheduleNextAlarm();
       }
+
     }
 
     // Preserve delivery of the original device response.
-    this.broadcastToClients({
+    this.broadcastToDeviceClients({
       ...message,
       type: "device_response",
       deviceId: session.deviceId,
       fromDeviceSessionId: session.sessionId,
       timestamp: new Date().toISOString()
-    }, session.sessionId, "web");
+    }, session.deviceId, session.sessionId);
   }
 
+  async syncDeviceFingerprintAuthorization(deviceId) {
+    if (!this.houseId) {
+      console.error(`[HouseRoom] Cannot sync fingerprint authorization without a house ID`);
+      return false;
+    }
+    try {
+      const allowedFingerprintIds = await getAllowedFingerprintIds(
+        this.env,
+        deviceId,
+        this.houseId
+      );
+      const message = {
+        type: 'fingerprint.authorization.sync',
+        deviceId,
+        allowedFingerprintIds,
+        updatedAt: new Date().toISOString()
+      };
+      let delivered = false;
+      for (const session of this.getAllSessions()) {
+        if (session.clientType === 'device' && session.deviceId === deviceId) {
+          delivered = this.send(session.ws, message) || delivered;
+        }
+      }
+      return delivered;
+    } catch (error) {
+      console.error(
+        `[HouseRoom ${this.houseId}] Fingerprint authorization sync failed for device ${deviceId}:`,
+        error
+      );
+      return false;
+    }
+  }
+
+  async handleDeviceEvent(session, message) {
+    if (
+      Number(message.deviceId) !== session.deviceId ||
+      typeof message.event !== 'string' ||
+      !/^[a-z0-9._-]{1,80}$/i.test(message.event) ||
+      typeof message.success !== 'boolean'
+    ) {
+      this.sendError(session.ws, 'Invalid device event');
+      return;
+    }
+
+    await writeAuditLog(this.env, {
+      deviceId: session.deviceId,
+      action: `device.${message.event}`,
+      outcome: message.success ? 'success' : 'failed',
+      source: typeof message.source === 'string'
+        ? message.source.slice(0, 40)
+        : 'device',
+      details: {
+        message: typeof message.message === 'string'
+          ? message.message.slice(0, 500)
+          : null
+      }
+    });
+  }
 
   // ---------------------------------------------------------
   // Fingerprint workflows
   // ---------------------------------------------------------
 
   async handleFingerprintEvent(ws, deviceSession, message) {
+    const resolvedDeviceSession = typeof ws === 'string'
+      ? (this.sessions.get(ws) || deviceSession)
+      : deviceSession;
+    const socket = this.resolveSocket(ws, resolvedDeviceSession || deviceSession);
+    if (!resolvedDeviceSession || !socket) {
+      return;
+    }
+
     const isScanError = message.event === "scan_error";
   const hasId =
     message.id !== undefined &&
@@ -854,6 +1188,7 @@ export class HouseRoom {
           UPDATE device_fingerprint_enrollments
           SET status = 'active',
               enrollment_pending = 0,
+              pending_expires_at = NULL,
               updated_at = ?
           WHERE device_id = ?
             AND fingerprint_id = ?
@@ -863,6 +1198,7 @@ export class HouseRoom {
           deviceSession.deviceId,
           fingerprintId
         ).run();
+        await this.syncDeviceFingerprintAuthorization(deviceSession.deviceId);
 
       } else if (message.event === "enrollment_failed") {
         const enrollment = await this.env.DB.prepare(`
@@ -892,6 +1228,7 @@ export class HouseRoom {
         await this.env.DB.prepare(`
           UPDATE device_fingerprint_enrollments
           SET enrollment_pending = 0,
+              pending_expires_at = NULL,
               updated_at = ?
           WHERE device_id = ?
             AND fingerprint_id = ?
@@ -949,11 +1286,25 @@ export class HouseRoom {
           deviceSession.deviceId,
           fingerprintId
         ).run();
+        await this.syncDeviceFingerprintAuthorization(deviceSession.deviceId);
 
       } else if (
         message.event === "recognized" &&
         message.success === true
       ) {
+        const enrollment = await this.env.DB.prepare(`
+          SELECT user_id
+          FROM device_fingerprint_enrollments
+          WHERE device_id = ? AND fingerprint_id = ?
+        `).bind(deviceSession.deviceId, fingerprintId).first();
+        const userColumns = await this.ensureUserColumns();
+        const activeClause = userColumns.has('is_active')
+          ? "AND COALESCE(u.is_active, 1) = 1"
+          : "";
+        const statusClause = userColumns.has('status')
+          ? "AND LOWER(COALESCE(u.status, 'active')) != 'suspended'"
+          : "";
+
         const authorized = await this.env.DB.prepare(`
           SELECT e.user_id
           FROM device_fingerprint_enrollments e
@@ -965,6 +1316,8 @@ export class HouseRoom {
             AND d.house_id = ?
             AND e.status = 'active'
             AND e.enrollment_pending = 0
+            ${activeClause}
+            ${statusClause}
             AND (
               u.role = 'admin'
               OR (
@@ -985,26 +1338,86 @@ export class HouseRoom {
         ).first();
 
         forwarded.accessGranted = Boolean(authorized);
-        eventUserId = authorized?.user_id ?? null;
+        eventUserId = enrollment?.user_id ?? null;
+        await writeAuditLog(this.env, {
+          userId: eventUserId,
+          deviceId: deviceSession.deviceId,
+          action: 'fingerprint.recognition',
+          outcome: authorized ? 'success' : 'denied',
+          source: 'fingerprint',
+          details: {
+            fingerprintId,
+            confidence: Number.isFinite(Number(message.confidence))
+              ? Number(message.confidence)
+              : null
+          }
+        });
 
         if (authorized) {
-          this.send(ws, {
+          const commandId = crypto.randomUUID();
+          const command = {
             type: "device_command",
-            deviceId: deviceSession.deviceId,
+            deviceId: resolvedDeviceSession.deviceId,
+            commandId,
             command: "door.unlock",
             params: {},
             timestamp: new Date().toISOString()
+          };
+          if (this.state?.storage?.put) {
+            const timeoutMs = 10_000;
+            await this.state.storage.put(`pending-command:${commandId}`, {
+              commandId,
+              targetDeviceId: resolvedDeviceSession.deviceId,
+              command: command.command,
+              fromSessionId: null,
+              userId: authorized.user_id,
+              source: 'fingerprint',
+              deadline: Date.now() + timeoutMs,
+              timeoutMs
+            });
+            await this.scheduleNextAlarm();
+          }
+          this.send(socket, {
+            ...command
           });
         }
+      } else if (message.event === 'unrecognized' || message.event === 'scan_error') {
+        await writeAuditLog(this.env, {
+          deviceId: deviceSession.deviceId,
+          action: `fingerprint.${message.event}`,
+          outcome: 'denied',
+          source: 'fingerprint',
+          details: {
+            message: typeof message.message === 'string'
+              ? message.message.slice(0, 500)
+              : null
+          }
+        });
+      }
+
+      if (!['recognized', 'unrecognized', 'scan_error'].includes(message.event)) {
+        await writeAuditLog(this.env, {
+          userId: eventUserId,
+          deviceId: deviceSession.deviceId,
+          action: `fingerprint.${message.event}`,
+          outcome: message.success === false ? 'failed' : 'success',
+          source: 'fingerprint',
+          details: {
+            fingerprintId,
+            message: typeof message.message === 'string'
+              ? message.message.slice(0, 500)
+              : null
+          }
+        });
       }
 
       // Preserve the original fingerprint event audience:
       // admin/owner, or the user associated with the fingerprint.
       for (const clientSession of this.getAllSessions()) {
         if (
-          clientSession.sessionId === deviceSession.sessionId ||
+          clientSession.sessionId === resolvedDeviceSession.sessionId ||
           clientSession.clientType !== "web" ||
-          clientSession.deviceId !== deviceSession.deviceId ||
+          clientSession.deviceId !== resolvedDeviceSession.deviceId ||
           (
             clientSession.role !== "admin" &&
             clientSession.role !== "owner" &&
@@ -1030,9 +1443,9 @@ export class HouseRoom {
 
       for (const clientSession of this.getAllSessions()) {
         if (
-          clientSession.sessionId !== deviceSession.sessionId &&
+          clientSession.sessionId !== resolvedDeviceSession.sessionId &&
           clientSession.clientType === "web" &&
-          clientSession.deviceId === deviceSession.deviceId &&
+          clientSession.deviceId === resolvedDeviceSession.deviceId &&
           (
             clientSession.role === "admin" ||
             clientSession.role === "owner"
@@ -1051,13 +1464,15 @@ export class HouseRoom {
   // Connected device/session lists
   // ---------------------------------------------------------
 
-  handleGetDevices(ws) {
+  handleGetDevices(ws, requestingSession) {
     const devicesById = new Map();
+    const canListAllDevices = requestingSession?.role === 'admin';
 
     for (const session of this.getAllSessions()) {
       if (
         session.clientType !== "device" ||
-        !Number.isInteger(session.deviceId)
+        !Number.isInteger(session.deviceId) ||
+        (!canListAllDevices && Number(session.deviceId) !== Number(requestingSession?.deviceId))
       ) {
         continue;
       }
@@ -1220,6 +1635,19 @@ export class HouseRoom {
       // Delete before notifying, so duplicate alarm execution
       // cannot report the same timeout more than once.
       await this.state.storage.delete(key);
+      await writeAuditLog(this.env, {
+        userId: command.userId ?? null,
+        deviceId: command.targetDeviceId,
+        action: 'device.command',
+        outcome: 'timeout',
+        source: command.source || 'web',
+        commandId: command.commandId,
+        details: {
+          command: command.command,
+          reason: 'no_acknowledgement',
+          timeoutMs: command.timeoutMs
+        }
+      });
 
       const timeoutMessage = {
         type: "command_timeout",

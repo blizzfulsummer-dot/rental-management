@@ -11,6 +11,39 @@
  */
 
 import { jwtVerify } from 'jose';
+import { getSecretBytes } from './secrets.js';
+
+async function getUserAccountStatus(env, userId) {
+  try {
+    const columns = await env.DB.prepare('PRAGMA table_info(users)').all();
+    const names = new Set((columns.results || []).map(column => column.name));
+    const fields = [];
+    if (names.has('is_active')) fields.push('is_active');
+    if (names.has('status')) fields.push('status');
+
+    if (!fields.length) {
+      return { active: true, status: 'active' };
+    }
+
+    const row = await env.DB.prepare(`SELECT ${fields.join(', ')} FROM users WHERE id = ?`).bind(userId).first();
+    if (!row) return { active: false, status: 'suspended' };
+
+    let status = 'active';
+    let active = true;
+    if (Object.prototype.hasOwnProperty.call(row, 'status')) {
+      status = String(row.status || 'active').toLowerCase();
+      active = status !== 'suspended';
+    }
+    if (Object.prototype.hasOwnProperty.call(row, 'is_active')) {
+      active = Number(row.is_active) !== 0 && active;
+      if (!active) status = 'suspended';
+    }
+    return { active, status: active ? 'active' : (status || 'suspended') };
+  } catch (error) {
+    // Do not grant a WebSocket session when account state cannot be verified.
+    throw error;
+  }
+}
 
 /**
  * Generate a UUID using Web Crypto API (works in Cloudflare Workers)
@@ -63,7 +96,7 @@ export async function issueWebSocketTicket(request, env) {
 
     // Verify JWT
     try {
-      const verified = await jwtVerify(token, getSecret(env));
+      const verified = await jwtVerify(token, await getSecretBytes(env, 'JWT_SCRT'));
       payload = verified.payload;
     } catch (error) {
       console.error('JWT verification failed:', error.message);
@@ -110,6 +143,11 @@ export async function issueWebSocketTicket(request, env) {
 
     if (!user) {
       return json({ error: 'User not found' }, 404);
+    }
+
+    const accountState = await getUserAccountStatus(env, user.id);
+    if (!accountState.active) {
+      return json({ error: 'This account has been suspended', code: 'ACCOUNT_SUSPENDED' }, 403);
     }
 
     const device = await env.DB
@@ -191,7 +229,9 @@ export async function issueDeviceWebSocketTicket(request, env) {
   if (request.method !== 'POST') {
     return json({ error: 'Method not allowed' }, 405);
   }
-  if (new URL(request.url).protocol !== 'https:') {
+  const requestUrl = new URL(request.url);
+  const isLocalDevelopment = ['localhost', '127.0.0.1', '[::1]'].includes(requestUrl.hostname);
+  if (requestUrl.protocol !== 'https:' && !isLocalDevelopment) {
     return json({ error: 'HTTPS is required for device pairing' }, 426);
   }
 
@@ -329,6 +369,12 @@ export async function validateWebSocketTicket(env, ticketId, houseId) {
       return { valid: false, error: 'User not found' };
     }
 
+    const accountState = await getUserAccountStatus(env, ticket.user_id);
+    if (!accountState.active) {
+      console.warn(`[WebSocket] Suspended user attempted WebSocket access: ${ticket.user_id}`);
+      return { valid: false, error: 'Account suspended' };
+    }
+
     return {
       valid: true,
       userId: ticket.user_id,
@@ -345,17 +391,6 @@ export async function validateWebSocketTicket(env, ticketId, houseId) {
 }
 
 /**
- * Helper: Get JWT secret from environment
- */
-function getSecret(env) {
-  const secret = env.JWT_SCRT;
-  if (!secret) {
-    throw new Error('JWT_SCRT not configured');
-  }
-  return new TextEncoder().encode(secret);
-}
-
-/**
  * Helper: Parse JSON body safely
  */
 async function parseJsonBody(request) {
@@ -367,9 +402,21 @@ async function parseJsonBody(request) {
   }
 }
 
+async function runDbBatch(env, statements) {
+  if (typeof env.DB.batch === 'function') {
+    return env.DB.batch(statements);
+  }
+
+  const results = [];
+  for (const statement of statements) {
+    results.push(await statement.run());
+  }
+  return results;
+}
+
 /**
  * Replace previous tickets for the same client.
- * D1 batch executes both statements atomically.
+ * D1 batch executes both statements atomically when supported.
  */
 async function replaceWebSocketTicket(env, {
   ticketId,
@@ -415,7 +462,7 @@ async function replaceWebSocketTicket(env, {
     createdAt
   );
 
-  await env.DB.batch([
+  await runDbBatch(env, [
     deleteStatement,
     insertStatement
   ]);

@@ -35,8 +35,8 @@ You should see the Smart Home login page.
 
 Click "Sign In" (credentials are pre-filled):
 ```
-Email: admin@example.com
-Password: AdminPass123!
+Email: admin.demo@example.test
+Password: DemoPass123!
 ```
 
 You'll see:
@@ -93,7 +93,7 @@ You should now see:
 1. Page loads with login form
 2. Enter credentials (or use pre-filled)
 3. Click "Sign In"
-4. Activity Log shows: "Logged in as admin@example.com"
+4. Activity Log shows: "Logged in as admin.demo@example.test"
 5. Dashboard loads with connecting status
 6. Status updates to "Connected"
 ```
@@ -184,7 +184,7 @@ Frontend:
 
 **Test:**
 1. Open second browser tab: `http://localhost:8787/`
-2. Login as same user (admin@example.com)
+2. Login as same user (admin.demo@example.test)
 3. Both tabs should connect to same house room
 4. Send command from one tab
 5. Other tab should see the device update
@@ -242,8 +242,8 @@ If you prefer testing via command line:
 curl -X POST http://localhost:8787/api/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@example.com",
-    "password": "AdminPass123!"
+    "email": "admin.demo@example.test",
+    "password": "DemoPass123!"
   }'
 ```
 
@@ -253,7 +253,7 @@ Response:
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
     "id": 1,
-    "email": "admin@example.com",
+    "email": "admin.demo@example.test",
     "role": "admin"
   }
 }
@@ -352,10 +352,10 @@ Run with custom configuration:
 # Custom device
 DEVICE_ID=2 DEVICE_NAME="Kitchen Light" node device-simulator.js
 
-# Multiple simulators (different terminals)
-DEVICE_ID=1 DEVICE_NAME="Device 1" node device-simulator.js
-DEVICE_ID=2 DEVICE_NAME="Device 2" node device-simulator.js
-DEVICE_ID=3 DEVICE_NAME="Device 3" node device-simulator.js
+# Multiple simulators: each device needs its own pairing key
+DEVICE_ID=1 DEVICE_API_KEY=<device-1-pairing-key> DEVICE_NAME="Device 1" node device-simulator.js
+DEVICE_ID=2 DEVICE_API_KEY=<device-2-pairing-key> DEVICE_NAME="Device 2" node device-simulator.js
+DEVICE_ID=3 DEVICE_API_KEY=<device-3-pairing-key> DEVICE_NAME="Device 3" node device-simulator.js
 ```
 
 ### Environment Variables
@@ -366,8 +366,7 @@ WS_URL               # WebSocket base URL (default: ws://localhost:8787)
 DEVICE_ID            # Device ID to simulate (default: 1)
 DEVICE_TYPE          # Device type (default: light)
 DEVICE_NAME          # Display name (default: Simulated Device)
-HOUSE_ID             # House ID (default: 1)
-DEVICE_API_KEY       # API key for device auth (default: demo)
+DEVICE_API_KEY       # Required 64-character pairing key from the ReMan dashboard (no default)
 SIMULATE_COMMANDS    # Respond to commands (default: true)
 ```
 
@@ -446,7 +445,7 @@ PORT=8788 npm run dev
 **Solution:**
 1. Check device simulator is running
 2. Add test devices to database
-3. Verify HOUSE_ID matches (default: 1)
+3. Verify the device pairing key belongs to the expected device; the server supplies its property ID automatically.
 4. Refresh browser
 5. Check wrangler logs
 
